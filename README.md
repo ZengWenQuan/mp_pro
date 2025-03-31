@@ -1,6 +1,34 @@
-# 恒星光谱特征预测模型
+# Deep Learning Project
 
-该项目使用深度学习模型预测恒星光谱的关键特征参数（logg, feh, teff）。支持多种深度学习模型架构，并提供完整的训练、评估和预测流程。
+这是一个基于 PyTorch 的深度学习项目，支持多种神经网络模型进行预测任务。
+
+## 功能特点
+
+- 支持多种深度学习模型：
+
+  - MLP (多层感知机)
+  - Conv1D (一维卷积神经网络)
+  - LSTM (长短期记忆网络)
+  - Transformer (变换器模型)
+  - Autoencoder (自编码器)
+- 完整的训练和评估流程：
+
+  - 支持断点恢复训练（使用 --resume_from）
+  - 自动保存最佳模型
+  - 每10轮保存一次检查点
+  - 支持早停机制
+  - TensorBoard 可视化支持
+- 灵活的配置系统：
+
+  - 使用 YAML 配置文件
+  - 可配置模型结构、训练参数等
+  - 支持命令行参数覆盖
+
+## 安装依赖
+
+```bash
+pip install -r requirements.txt
+```
 
 ## 项目结构
 
@@ -44,11 +72,12 @@
 数据集分为训练集和测试集，每个集合由特征文件和标签文件组成：
 
 1. **特征文件（features.csv）**：
+
    - 第一列必须是 `obsid`（观测ID），用于唯一标识每个样本
    - 其余列为恒星光谱数据，通常包含数百至数千个波长点的光谱通量值
    - 特征数量（列数）可能较多，从几百到上千不等
-
 2. **标签文件（labels.csv）**：
+
    - 必须包含 `obsid`列，用于与特征文件进行匹配
    - 包含预测目标列：`logg`、`feh`和 `teff`
    - 可能包含其他辅助信息列（如观测时间、信噪比等）
@@ -78,6 +107,7 @@
 ### 示例数据
 
 特征文件（features.csv）示例：
+
 ```
 obsid,flux_1,flux_2,flux_3,...,flux_1684
 spec_00001,0.954,0.967,0.982,...,1.023
@@ -86,6 +116,7 @@ spec_00002,0.871,0.896,0.913,...,0.957
 ```
 
 标签文件（labels.csv）示例：
+
 ```
 obsid,logg,feh,teff
 spec_00001,4.5,-0.2,5800
@@ -108,6 +139,7 @@ spec_00002,2.8,-1.4,4200
 ### 使用方法
 
 只需运行以下命令：
+
 ```bash
 python setup.py
 ```
@@ -136,6 +168,7 @@ pip install -r requirements.txt --ignore-installed torch torchvision
 ## 依赖说明
 
 主要依赖包括：
+
 - PyTorch >= 1.10.0
 - NumPy >= 1.21.0
 - Pandas >= 1.3.0
@@ -165,23 +198,27 @@ data:
 ### 2. 训练模型
 
 使用默认配置训练MLP模型:
+
 ```bash
-python run_train.py --config configs/mlp_config.yaml
+python run_train.py --config configs/mlp.yaml
 ```
 
 或者训练其他模型:
+
 ```bash
-python run_train.py --config configs/lstm_config.yaml
-python run_train.py --config configs/conv1d_config.yaml
-python run_train.py --config configs/transformer_config.yaml
+python run_train.py --config configs/lstm.yaml
+python run_train.py --config configs/conv1d.yaml
+python run_train.py --config configs/transformer.yaml
 ```
 
 指定实验名称:
+
 ```bash
-python run_train.py --config configs/mlp_config.yaml --exp-name my_experiment
+python run_train.py --config configs/mlp.yaml --exp-name my_experiment
 ```
 
 训练结果将保存在 `runs/模型名称_时间戳/`目录下，包括：
+
 - 模型权重: `weights/best.pt`
 - 损失曲线图: `plots/loss_curve.png`
 - 配置文件和日志
@@ -189,11 +226,13 @@ python run_train.py --config configs/mlp_config.yaml --exp-name my_experiment
 ### 3. 评估模型
 
 训练完成后，使用以下命令评估模型性能:
+
 ```bash
 python run_evaluate.py --model-path runs/模型名称_时间戳/weights/best.pt --config configs/模型名称_config.yaml
 ```
 
 评估结果将保存在 `runs/模型名称_时间戳/evaluation/`目录下，包括：
+
 - 评估指标: `evaluation_results.csv`
 - 预测结果: `predictions.csv`
 - 每个特征的预测vs实际散点图
@@ -201,11 +240,13 @@ python run_evaluate.py --model-path runs/模型名称_时间戳/weights/best.pt 
 ### 4. 使用训练好的模型进行预测
 
 对新数据进行预测：
+
 ```bash
 python detect.py --weights runs/模型名称_时间戳/weights/best.pt --config configs/模型名称_config.yaml --input path/to/features.csv --output predictions
 ```
 
 可以对单个文件或整个目录进行预测：
+
 ```bash
 # 预测目录中的数据
 python detect.py --weights runs/模型名称_时间戳/weights/best.pt --config configs/模型名称_config.yaml --input path/to/data_dir --output predictions
@@ -215,11 +256,13 @@ python detect.py --weights runs/模型名称_时间戳/weights/best.pt --config 
 ```
 
 生成预测结果的可视化图表：
+
 ```bash
 python detect.py --weights runs/模型名称_时间戳/weights/best.pt --input data/test/ --output predictions --save-plots
 ```
 
 预测结果将保存在指定的 `output`目录中：
+
 - 预测结果CSV文件：`predictions_时间戳.csv`
 - 可视化图表（如果使用 `--save-plots`）：`plots/`目录下
 
@@ -289,53 +332,15 @@ training:
 本框架支持使用TensorBoard监控训练过程，训练日志会自动保存在实验目录下的 `logs`文件夹内。
 
 启动TensorBoard：
+
 ```bash
 tensorboard --logdir=runs/实验名称/logs
 ```
 
 然后在浏览器中访问 http://localhost:6006 查看训练过程中的：
+
 - 训练损失和验证损失
 - 每个特征的MSE损失
 - 学习率变化
 - 模型架构图
 - 最佳模型性能
-
-## 评估模型
-
-使用以下命令评估已训练的模型：
-```bash
-python evaluate.py --model-path runs/模型名_时间戳/weights/best.pt --config configs/config.yaml
-```
-
-评估结果将保存在 `results/`目录下。
-
-## 使用模型进行预测
-
-使用以下命令对新数据进行预测：
-```bash
-python detect.py --weights runs/模型名_时间戳/weights/best.pt --input data/test/features.csv --output predictions
-```
-
-可以添加 `--save-plots`参数生成预测可视化图表。
-
-## 支持的模型
-
-- MLP：多层感知机模型
-- Conv1D：一维卷积神经网络
-- LSTM：长短期记忆网络
-- Transformer：变压器模型
-
-## 注意事项
-
-- 请确保数据已经适当清洗和预处理
-- 模型训练过程会自动对特征和标签进行归一化处理
-- 预测时会自动加载训练时保存的归一化参数
-- 支持GPU加速，但会自动降级到CPU（如果GPU不可用）
-
-## 项目说明
-
-[这里添加项目说明]
-
-## 贡献指南
-
-[这里添加贡献指南]

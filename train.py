@@ -20,10 +20,12 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Training script for prediction model')
     parser.add_argument('--config', type=str, default='configs/config.yaml',
                         help='Path to config file')
+    parser.add_argument('--pretrained', type=str, default=None,
+                        help='Path to pretrained model weights')
     parser.add_argument('--seed', type=int, default=42,
                         help='Random seed for reproducibility')
-    parser.add_argument('--resume', type=str, default=None,
-                        help='Resume training from checkpoint')
+    parser.add_argument('--resume_from', type=str, default=None,
+                        help='Path to checkpoint for resuming training')
     parser.add_argument('--exp-name', type=str, default=None,
                         help='Experiment name (default: model_name + timestamp)')
     return parser.parse_args()
@@ -178,8 +180,8 @@ def main():
     print(f"Experiment directory: {exp_dir}")
     
     # Update config with command line arguments
-    if args.resume:
-        config['resume'] = args.resume
+    if args.resume_from:
+        config['resume_from'] = args.resume_from
     
     # Save config to experiment directory
     config_path = exp_dir / 'config.yaml'
@@ -277,6 +279,12 @@ def main():
     # Create model
     model = get_model(config['model'])
     print(f"Model: {model}")
+    
+    # 如果指定了断点路径，从断点恢复训练
+    if args.resume_from:
+        print(f"Resuming training from checkpoint: {args.resume_from}")
+        checkpoint = torch.load(args.resume_from)
+        model.load_state_dict(checkpoint['model_state_dict'])
     
     # 打印模型参数数量
     total_params = sum(p.numel() for p in model.parameters())

@@ -55,14 +55,20 @@ class Trainer:
         )
         
         # Training history
+        self.start_epoch = 0
+        self.best_val_loss = float('inf')
         self.train_losses = []
         self.val_losses = []
-        self.best_val_loss = float('inf')
-        self.start_epoch = 0
         
-        # Resume from checkpoint if specified
-        if config.get('resume', False):
-            self._load_checkpoint(config['resume'])
+        # 如果配置中指定了预训练权重，加载它们
+        pretrained_path = config.get('pretrained', None)
+        if pretrained_path:
+            self._load_pretrained(pretrained_path)
+        
+        # 如果指定了断点路径，从断点恢复训练
+        resume_path = config.get('resume_from', None)
+        if resume_path:
+            self._resume_from_checkpoint(resume_path)
     
     def _get_loss_fn(self, loss_name):
         """Get loss function"""
@@ -114,24 +120,31 @@ class Trainer:
         else:
             raise ValueError(f"Unsupported scheduler: {scheduler_name}")
     
-    def _load_checkpoint(self, checkpoint_path):
-        """Load checkpoint"""
-        if not os.path.exists(checkpoint_path):
-            print(f"Checkpoint not found at {checkpoint_path}")
+    def _load_pretrained(self, pretrained_path):
+        """加载预训练权重"""
+        if not os.path.exists(pretrained_path):
+            print(f"Warning: Pretrained weights not found at {pretrained_path}")
             return
+            
+        print(f"Loading pretrained weights from {pretrained_path}")
+        checkpoint = torch.load(pretrained_path)
         
-        checkpoint = torch.load(checkpoint_path)
+        # 加载模型权重
         self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.start_epoch = checkpoint['epoch'] + 1
-        self.best_val_loss = checkpoint['best_val_loss']
-        self.train_losses = checkpoint.get('train_losses', [])
-        self.val_losses = checkpoint.get('val_losses', [])
         
-        if self.scheduler and 'scheduler_state_dict' in checkpoint:
+        # 可选：加载优化器状态
+        if 'optimizer_state_dict' in checkpoint and not self.config.get('reset_optimizer', False):
+            self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            
+        # 可选：加载学习率调度器状态
+        if self.scheduler and 'scheduler_state_dict' in checkpoint and not self.config.get('reset_scheduler', False):
             self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
         
-        print(f"Loaded checkpoint from {checkpoint_path} (epoch {checkpoint['epoch']})")
+        # 可选：加载最佳验证损失
+        if 'best_val_loss' in checkpoint:
+            self.best_val_loss = checkpoint['best_val_loss']
+            
+        print(f"Successfully loaded pretrained weights")
     
     def _save_checkpoint(self, epoch, is_best=False, filename=None):
         """保存检查点"""
@@ -178,6 +191,33 @@ class Trainer:
         # 只保存best.pt
         best_path = Path(self.experiment_dir) / 'weights' / 'best.pt'
         torch.save(state, best_path)
+    
+    def _resume_from_checkpoint(self, checkpoint_path):
+        """从断点恢复训练"""
+        if not os.path.exists(checkpoint_path):
+            print(f"Warning: Checkpoint not found at {checkpoint_path}")
+            return
+            
+        print(f"Resuming training from checkpoint: {checkpoint_path}")
+        checkpoint = torch.load(checkpoint_path)
+        
+        # 加载模型权重
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        
+        # 加载优化器状态
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        
+        # 加载学习率调度器状态
+        if self.scheduler and 'scheduler_state_dict' in checkpoint:
+            self.scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        
+        # 加载训练状态
+        self.start_epoch = checkpoint['epoch'] + 1
+        self.best_val_loss = checkpoint['best_val_loss']
+        self.train_losses = checkpoint.get('train_losses', [])
+        self.val_losses = checkpoint.get('val_losses', [])
+        
+        print(f"Resumed training from epoch {self.start_epoch}")
     
     def train_epoch(self, epoch):
         """Train for one epoch"""
@@ -301,12 +341,27 @@ class Trainer:
         patience_counter = 0
         best_epoch = 0
         
-        for epoch in range(self.config['epochs']):
+        for epoch in range(self.start_epoch, self.config['epochs']):
             # 训练一个epoch
             train_loss = self.train_epoch(epoch)
             
             # 验证
             val_loss = self.validate(epoch)
+            
+            # 检查是否是最佳模型
+            is_best = val_loss < best_val_loss
+            if is_best:
+                best_val_loss = val_loss
+                best_epoch = epoch
+                # 保存最佳模型
+                self._save_checkpoint(epoch, is_best=True)
+                patience_counter = 0
+            else:
+                patience_counter += 1
+            
+            # 每10轮保存一次常规检查点
+            if (epoch + 1) % 10 == 0:
+                self._save_checkpoint(epoch, is_best=False)
             
             # 更新学习率
             if self.scheduler:
@@ -327,22 +382,6 @@ class Trainer:
                 current_lr = self.optimizer.param_groups[0]['lr']
                 print(f"Learning Rate: {current_lr:.6f}")
             
-            # 保存最佳模型
-            if val_loss < best_val_loss:
-                best_val_loss = val_loss
-                best_epoch = epoch
-                patience_counter = 0
-                
-                # 保存最佳模型
-                best_model_path = self._save_checkpoint(epoch, is_best=True)
-                print(f"New best model saved! (Validation Loss: {val_loss:.4f})")
-            else:
-                patience_counter += 1
-                print(f"Patience counter: {patience_counter}/{self.config.get('patience', 10)}")
-            
-            # 保存当前模型
-            self._save_checkpoint(epoch)
-            
             # 绘制损失曲线
             plot_loss_curve(
                 self.train_losses, 
@@ -354,11 +393,6 @@ class Trainer:
             if patience_counter >= self.config.get('patience', 10):
                 print(f"\nEarly stopping triggered after {epoch + 1} epochs")
                 break
-            
-            # 加载最佳模型
-            if best_model_path:
-                self._load_checkpoint(best_model_path)
-                print(f"\nLoaded best model from epoch {best_epoch + 1}")
         
         # 训练完成后返回最佳验证损失
         return best_val_loss 
