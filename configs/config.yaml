@@ -1,0 +1,45 @@
+# Model Configuration
+model:
+  name: mlp  # Options: mlp, conv1d
+  input_dim: 64
+  hidden_dims: [128, 256, 128]
+  output_dim: 1
+  dropout_rate: 0.2
+  # Conv1D specific parameters
+  # input_channels: 1
+  # seq_len: 64
+  # num_classes: 1
+  # channels: [32, 64, 128]
+  # kernel_sizes: [3, 3, 3]
+  # fc_dims: [256, 128]
+
+# Data Configuration
+data:
+  data_size: 1000
+  seq_len: 64
+  feature_dim: 1
+  val_split: 0.2
+  test_split: 0.1
+  num_workers: 4
+  id_column: obsid  # 用于关联特征和标签文件的ID
+  features:
+    - logg  # Surface gravity
+    - feh   # Metallicity
+    - teff  # Effective temperature
+  use_all_features: true  # 使用特征文件中的所有特征
+
+# Training Configuration
+training:
+  batch_size: 32
+  epochs: 50
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  loss: mse  # Options: mse, mae, bce, ce
+  optimizer: adam  # Options: adam, sgd, rmsprop
+  scheduler: cosine  # Options: step, cosine, plateau, None
+  scheduler_params:
+    t_max: 50  # For cosine scheduler
+    # step_size: 10  # For step scheduler
+    # gamma: 0.1  # For step scheduler
+    # factor: 0.1  # For plateau scheduler
+    # patience: 5  # For plateau scheduler 

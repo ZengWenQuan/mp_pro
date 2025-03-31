@@ -1,0 +1,38 @@
+# Model Configuration
+model:
+  name: conv1d
+  input_channels: 1  # 固定为1，输入数据会在模型中重新调整形状
+  hidden_dims: [128, 256, 128]  # 全连接层的维度
+  output_dim: 3  # 预测三个特征：logg, feh, teff
+  dropout_rate: 0.2
+  # Conv1D特有参数
+  channels: [32, 64, 128]  # 卷积层通道数
+  kernel_sizes: [3, 3, 3]  # 卷积核大小
+  fc_dims: [256, 128]  # 全连接层维度
+
+# Data Configuration
+data:
+  data_size: 1000
+  seq_len: 64
+  feature_dim: 1  # 对于Conv1D，这个值会被忽略，因为所有特征都作为序列处理
+  val_split: 0.2
+  test_split: 0.1
+  num_workers: 4
+  id_column: obsid  # 用于关联特征和标签文件的ID
+  features:
+    - logg  # Surface gravity
+    - feh   # Metallicity
+    - teff  # Effective temperature
+  use_all_features: true  # 使用特征文件中的所有特征
+
+# Training Configuration
+training:
+  batch_size: 32
+  epochs: 50
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  loss: mse  # Options: mse, mae, bce, ce
+  optimizer: adam  # Options: adam, sgd, rmsprop
+  scheduler: cosine  # Options: step, cosine, plateau, None
+  scheduler_params:
+    t_max: 50  # For cosine scheduler 
