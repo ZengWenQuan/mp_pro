@@ -89,8 +89,44 @@ spec_00002,2.8,-1.4,4200
 ```
 
 ## 环境配置
+
+本项目提供了智能安装脚本 `setup.py`，可以根据您的环境自动选择合适的依赖项。
+
+### 特点
+
+- 自动检测已安装的库，避免重复安装
+- 自动检测GPU/CUDA可用性
+  - 若检测到GPU，则安装支持CUDA的PyTorch版本
+  - 若无GPU，则安装CPU版本的PyTorch
+- 只安装缺失的依赖，提高安装效率
+
+### 使用方法
+
+只需运行以下命令：
+
 ```bash
+python setup.py
+```
+
+### 安装过程
+
+1. 脚本会先检测您的环境是否有GPU
+2. 检查已安装的库及其版本
+3. 只安装缺失或版本不符的库
+4. 对于PyTorch相关库，根据GPU可用性选择合适版本
+5. 安装完成后验证PyTorch安装情况
+
+### 手动安装
+
+如果您想手动安装，可以使用以下命令：
+
+```bash
+# 使用GPU版本（需要NVIDIA GPU和CUDA）
 pip install -r requirements.txt
+
+# 使用CPU版本
+pip install torch>=1.10.0+cpu torchvision>=0.11.0+cpu --extra-index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt --ignore-installed torch torchvision
 ```
 
 ## 使用方法
@@ -262,4 +298,12 @@ python detect.py --weights runs/模型名_时间戳/weights/best.pt --input data
 ## 注意事项
 
 - 请确保数据已经适当清洗和预处理
-- 模型训练过程会自动对特征和标签进行归一化处理 
+- 模型训练过程会自动对特征和标签进行归一化处理
+
+## 项目说明
+
+[这里添加项目说明]
+
+## 贡献指南
+
+[这里添加贡献指南] 
