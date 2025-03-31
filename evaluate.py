@@ -120,9 +120,18 @@ def load_data(data_cfg, dataset_type='test'):
     labels = data_cfg.get('labels', ['logg', 'feh', 'teff'])
     use_all_features = data_cfg.get('use_all_features', True)
     
-    # 加载数据集
-    features_path = f'data/{dataset_type}/features.csv'
-    labels_path = f'data/{dataset_type}/labels.csv'
+    # 从配置中获取数据路径
+    data_dir = data_cfg.get(f'{dataset_type}_dir', f'data/{dataset_type}')
+    features_file = data_cfg.get('features_file', 'features.csv')
+    labels_file = data_cfg.get('labels_file', 'labels.csv')
+    
+    # 构建完整的文件路径
+    features_path = os.path.join(data_dir, features_file)
+    labels_path = os.path.join(data_dir, labels_file)
+    
+    print(f"加载{dataset_type}数据集:")
+    print(f"  特征文件: {features_path}")
+    print(f"  标签文件: {labels_path}")
     
     features_df = pd.read_csv(features_path)
     labels_df = pd.read_csv(labels_path)

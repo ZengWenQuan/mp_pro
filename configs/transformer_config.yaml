@@ -11,6 +11,10 @@ model:
 
 # Data Configuration
 data:
+  train_dir: data/train  # 训练数据目录
+  test_dir: data/test   # 测试数据目录
+  features_file: features_filtered_501features.csv  # 特征文件名
+  labels_file: labels.csv     # 标签文件名
   data_size: 1000
   seq_len: 64
   feature_dim: 1

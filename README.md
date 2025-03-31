@@ -1,24 +1,26 @@
 # 恒星光谱特征预测模型
 
-该项目使用深度学习模型预测恒星光谱的关键特征参数（logg, feh, teff）。
+该项目使用深度学习模型预测恒星光谱的关键特征参数（logg, feh, teff）。支持多种深度学习模型架构，并提供完整的训练、评估和预测流程。
 
 ## 项目结构
 
 ```
 ├── configs/           # 配置文件
-│   ├── config.yaml    # MLP模型配置
-│   └── conv1d_config.yaml # Conv1D模型配置
+│   ├── mlp_config.yaml    # MLP模型配置
+│   ├── lstm_config.yaml   # LSTM模型配置
+│   ├── conv1d_config.yaml # Conv1D模型配置
+│   └── transformer_config.yaml # Transformer模型配置
 ├── models/            # 模型定义
 ├── utils/             # 工具函数
 ├── train/             # 训练相关脚本
 ├── detect.py          # 预测脚本
 ├── evaluate.py        # 模型评估脚本
 ├── demo/              # 演示应用
-├── data/              # 数据目录
-│   ├── train/         # 训练数据集
+├── data/              # 默认数据目录
+│   ├── train/         # 默认训练数据集目录
 │   │   ├── features.csv  # 训练特征
 │   │   └── labels.csv    # 训练标签
-│   └── test/          # 测试数据集
+│   └── test/          # 默认测试数据集目录
 │       ├── features.csv  # 测试特征
 │       └── labels.csv    # 测试标签
 ├── train.py           # 主训练脚本
@@ -42,12 +44,11 @@
 数据集分为训练集和测试集，每个集合由特征文件和标签文件组成：
 
 1. **特征文件（features.csv）**：
-
    - 第一列必须是 `obsid`（观测ID），用于唯一标识每个样本
    - 其余列为恒星光谱数据，通常包含数百至数千个波长点的光谱通量值
    - 特征数量（列数）可能较多，从几百到上千不等
-2. **标签文件（labels.csv）**：
 
+2. **标签文件（labels.csv）**：
    - 必须包含 `obsid`列，用于与特征文件进行匹配
    - 包含预测目标列：`logg`、`feh`和 `teff`
    - 可能包含其他辅助信息列（如观测时间、信噪比等）
@@ -77,7 +78,6 @@
 ### 示例数据
 
 特征文件（features.csv）示例：
-
 ```
 obsid,flux_1,flux_2,flux_3,...,flux_1684
 spec_00001,0.954,0.967,0.982,...,1.023
@@ -86,7 +86,6 @@ spec_00002,0.871,0.896,0.913,...,0.957
 ```
 
 标签文件（labels.csv）示例：
-
 ```
 obsid,logg,feh,teff
 spec_00001,4.5,-0.2,5800
@@ -109,7 +108,6 @@ spec_00002,2.8,-1.4,4200
 ### 使用方法
 
 只需运行以下命令：
-
 ```bash
 python setup.py
 ```
@@ -135,34 +133,55 @@ pip install torch>=1.10.0+cpu torchvision>=0.11.0+cpu --extra-index-url https://
 pip install -r requirements.txt --ignore-installed torch torchvision
 ```
 
+## 依赖说明
+
+主要依赖包括：
+- PyTorch >= 1.10.0
+- NumPy >= 1.21.0
+- Pandas >= 1.3.0
+- Matplotlib >= 3.4.0
+- Scikit-learn >= 0.24.0
+- TensorBoard >= 2.6.0
+- PyYAML >= 5.4.0
+- Progressbar2 >= 3.53.0
+
 ## 使用方法
 
 ### 1. 数据准备
 
-确保 `data/train/`和 `data/test/`目录下分别有特征文件(`features.csv`)和标签文件(`labels.csv`)。两个文件通过 `obsid`列进行关联。
+数据路径可以在配置文件（configs/*.yaml）中指定：
+
+```yaml
+# Data Configuration
+data:
+  train_dir: data/train     # 训练数据目录
+  test_dir: data/test      # 测试数据目录
+  features_file: features.csv  # 特征文件名
+  labels_file: labels.csv     # 标签文件名
+```
+
+确保在指定的训练和测试目录下分别有特征文件和标签文件。两个文件通过 `obsid` 列进行关联。
 
 ### 2. 训练模型
 
 使用默认配置训练MLP模型:
-
 ```bash
-python run_train.py --config configs/config.yaml
+python run_train.py --config configs/mlp_config.yaml
 ```
 
-或者训练Conv1D模型:
-
+或者训练其他模型:
 ```bash
+python run_train.py --config configs/lstm_config.yaml
 python run_train.py --config configs/conv1d_config.yaml
+python run_train.py --config configs/transformer_config.yaml
 ```
 
 指定实验名称:
-
 ```bash
-python run_train.py --config configs/config.yaml --exp-name my_experiment
+python run_train.py --config configs/mlp_config.yaml --exp-name my_experiment
 ```
 
 训练结果将保存在 `runs/模型名称_时间戳/`目录下，包括：
-
 - 模型权重: `weights/best.pt`
 - 损失曲线图: `plots/loss_curve.png`
 - 配置文件和日志
@@ -170,13 +189,11 @@ python run_train.py --config configs/config.yaml --exp-name my_experiment
 ### 3. 评估模型
 
 训练完成后，使用以下命令评估模型性能:
-
 ```bash
-python run_evaluate.py --model-path runs/模型名称_时间戳/weights/best.pt
+python run_evaluate.py --model-path runs/模型名称_时间戳/weights/best.pt --config configs/模型名称_config.yaml
 ```
 
 评估结果将保存在 `runs/模型名称_时间戳/evaluation/`目录下，包括：
-
 - 评估指标: `evaluation_results.csv`
 - 预测结果: `predictions.csv`
 - 每个特征的预测vs实际散点图
@@ -184,29 +201,25 @@ python run_evaluate.py --model-path runs/模型名称_时间戳/weights/best.pt
 ### 4. 使用训练好的模型进行预测
 
 对新数据进行预测：
-
 ```bash
-python detect.py --weights runs/模型名称_时间戳/weights/best.pt --input data/test/ --output predictions
+python detect.py --weights runs/模型名称_时间戳/weights/best.pt --config configs/模型名称_config.yaml --input path/to/features.csv --output predictions
 ```
 
 可以对单个文件或整个目录进行预测：
-
 ```bash
 # 预测目录中的数据
-python detect.py --weights runs/模型名称_时间戳/weights/best.pt --input data/new_data/ --output predictions
+python detect.py --weights runs/模型名称_时间戳/weights/best.pt --config configs/模型名称_config.yaml --input path/to/data_dir --output predictions
 
 # 预测单个文件
-python detect.py --weights runs/模型名称_时间戳/weights/best.pt --input data/new_data/features.csv --output predictions
+python detect.py --weights runs/模型名称_时间戳/weights/best.pt --config configs/模型名称_config.yaml --input path/to/features.csv --output predictions
 ```
 
 生成预测结果的可视化图表：
-
 ```bash
 python detect.py --weights runs/模型名称_时间戳/weights/best.pt --input data/test/ --output predictions --save-plots
 ```
 
 预测结果将保存在指定的 `output`目录中：
-
 - 预测结果CSV文件：`predictions_时间戳.csv`
 - 可视化图表（如果使用 `--save-plots`）：`plots/`目录下
 
@@ -214,6 +227,8 @@ python detect.py --weights runs/模型名称_时间戳/weights/best.pt --input d
 
 - **MLP** (多层感知机): 适用于简单数据关系
 - **Conv1D** (一维卷积神经网络): 适用于序列数据和信号处理
+- **LSTM** (长短期记忆网络): 适用于时序特征提取
+- **Transformer**: 适用于长序列建模和注意力机制
 
 ## 配置文件说明
 
@@ -222,7 +237,7 @@ python detect.py --weights runs/模型名称_时间戳/weights/best.pt --input d
 ```yaml
 # 模型配置
 model:
-  name: mlp  # 可选: mlp, conv1d
+  name: mlp  # 可选: mlp, conv1d, lstm, transformer
   input_dim: 64
   hidden_dims: [128, 256, 128]
   output_dim: 3  # 预测三个特征: logg, feh, teff
@@ -257,31 +272,28 @@ training:
 ## 更新日志
 
 - **2025-03-31**:
-
   - 添加了配置文件中的特征选项
   - 实现从实际数据集加载数据
   - 添加评估脚本和可视化功能
   - 支持通过obsid关联特征和标签文件
 - **最新更新**:
-
   - 修复了detect.py脚本，使其能够从实际数据集加载数据
   - 支持使用obsid列进行预测结果输出
   - 更新了预测可视化功能，支持多特征预测结果展示
   - 改进了项目文档，添加了详细的使用说明
   - 更新了requirements.txt，添加了所有必要的依赖项
+  - 将进度条显示从tqdm更换为progressbar2，提供更清晰的训练进度显示
 
 ## 使用TensorBoard监控训练过程
 
 本框架支持使用TensorBoard监控训练过程，训练日志会自动保存在实验目录下的 `logs`文件夹内。
 
 启动TensorBoard：
-
 ```bash
 tensorboard --logdir=runs/实验名称/logs
 ```
 
 然后在浏览器中访问 http://localhost:6006 查看训练过程中的：
-
 - 训练损失和验证损失
 - 每个特征的MSE损失
 - 学习率变化
@@ -291,7 +303,6 @@ tensorboard --logdir=runs/实验名称/logs
 ## 评估模型
 
 使用以下命令评估已训练的模型：
-
 ```bash
 python evaluate.py --model-path runs/模型名_时间戳/weights/best.pt --config configs/config.yaml
 ```
@@ -301,7 +312,6 @@ python evaluate.py --model-path runs/模型名_时间戳/weights/best.pt --confi
 ## 使用模型进行预测
 
 使用以下命令对新数据进行预测：
-
 ```bash
 python detect.py --weights runs/模型名_时间戳/weights/best.pt --input data/test/features.csv --output predictions
 ```
@@ -312,11 +322,15 @@ python detect.py --weights runs/模型名_时间戳/weights/best.pt --input data
 
 - MLP：多层感知机模型
 - Conv1D：一维卷积神经网络
+- LSTM：长短期记忆网络
+- Transformer：变压器模型
 
 ## 注意事项
 
 - 请确保数据已经适当清洗和预处理
 - 模型训练过程会自动对特征和标签进行归一化处理
+- 预测时会自动加载训练时保存的归一化参数
+- 支持GPU加速，但会自动降级到CPU（如果GPU不可用）
 
 ## 项目说明
 

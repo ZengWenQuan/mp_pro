@@ -8,6 +8,7 @@ from pathlib import Path
 import random
 import time
 import json
+from tqdm import tqdm
 
 from utils.general import seed_everything, load_config, create_exp_dir, get_device
 from utils.dataset import create_dataloaders, Normalizer
@@ -101,17 +102,23 @@ def load_data(data_cfg):
     labels = data_cfg.get('labels', ['logg', 'feh', 'teff'])
     use_all_features = data_cfg.get('use_all_features', True)
     
-    # 加载训练集
-    train_features_path = 'data/train/features.csv'
-    train_labels_path = 'data/train/labels.csv'
+    # 从配置中获取数据路径
+    train_dir = data_cfg.get('train_dir', 'data/train')
+    test_dir = data_cfg.get('test_dir', 'data/test')
+    features_file = data_cfg.get('features_file', 'features.csv')
+    labels_file = data_cfg.get('labels_file', 'labels.csv')
     
+    # 构建完整的文件路径
+    train_features_path = os.path.join(train_dir, features_file)
+    train_labels_path = os.path.join(train_dir, labels_file)
+    test_features_path = os.path.join(test_dir, features_file)
+    test_labels_path = os.path.join(test_dir, labels_file)
+    
+    # 加载训练集
     train_features = pd.read_csv(train_features_path)
     train_labels = pd.read_csv(train_labels_path)
     
     # 加载测试集
-    test_features_path = 'data/test/features.csv'
-    test_labels_path = 'data/test/labels.csv'
-    
     test_features = pd.read_csv(test_features_path)
     test_labels = pd.read_csv(test_labels_path)
     
@@ -279,7 +286,7 @@ def main():
     
     # 打印模型输出层
     if isinstance(model, MLP):
-        print(f"MLP输出层: {model.layers[-1]}")
+        print(f"MLP输出层: {model.model[-1]}")
     elif isinstance(model, Conv1D):
         print(f"Conv1D输出层: {model.fc_layers[-1]}")
     
@@ -307,6 +314,72 @@ def main():
     
     print(f"Training completed with best validation loss: {best_val_loss:.4f}")
     print(f"Results saved to: {exp_dir}")
+
+
+def train_epoch(model, train_loader, criterion, optimizer, device, epoch, total_epochs):
+    """训练一个epoch"""
+    model.train()
+    total_loss = 0
+    batch_losses = []
+    
+    # 创建进度条，设置leave=True保持显示
+    pbar = tqdm(train_loader, desc=f'Epoch {epoch}/{total_epochs} [Train]', 
+                leave=True, position=0, ncols=100)
+    
+    for batch_idx, (data, target) in enumerate(pbar):
+        data, target = data.to(device), target.to(device)
+        
+        optimizer.zero_grad()
+        output = model(data)
+        loss = criterion(output, target)
+        loss.backward()
+        optimizer.step()
+        
+        # 更新总损失和批次损失列表
+        total_loss += loss.item()
+        batch_losses.append(loss.item())
+        
+        # 计算平均损失
+        avg_loss = total_loss / (batch_idx + 1)
+        
+        # 更新进度条，但不重新创建
+        pbar.set_postfix({'loss': f'{loss.item():.3f}'})
+    
+    # 关闭进度条
+    pbar.close()
+    
+    return total_loss / len(train_loader), batch_losses
+
+def validate(model, val_loader, criterion, device, epoch, total_epochs):
+    """验证模型"""
+    model.eval()
+    total_loss = 0
+    batch_losses = []
+    
+    # 创建进度条，设置leave=True保持显示
+    pbar = tqdm(val_loader, desc=f'Epoch {epoch}/{total_epochs} [Val]', 
+                leave=True, position=1, ncols=100)
+    
+    with torch.no_grad():
+        for batch_idx, (data, target) in enumerate(pbar):
+            data, target = data.to(device), target.to(device)
+            output = model(data)
+            loss = criterion(output, target)
+            
+            # 更新总损失和批次损失列表
+            total_loss += loss.item()
+            batch_losses.append(loss.item())
+            
+            # 计算平均损失
+            avg_loss = total_loss / (batch_idx + 1)
+            
+            # 更新进度条，但不重新创建
+            pbar.set_postfix({'loss': f'{loss.item():.3f}'})
+    
+    # 关闭进度条
+    pbar.close()
+    
+    return total_loss / len(val_loader), batch_losses
 
 
 if __name__ == '__main__':

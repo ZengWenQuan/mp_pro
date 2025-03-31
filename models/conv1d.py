@@ -85,21 +85,16 @@ class Conv1D(nn.Module):
     
     def forward(self, x):
         """Forward pass"""
-        # 打印输入形状，帮助调试
-        orig_shape = x.shape
-        
         # 确保输入的形状正确：[batch_size, input_channels, seq_len]
         if len(x.shape) == 2:
             # 输入为 [batch_size, seq_len]，需要增加通道维度
             x = x.unsqueeze(1)  # 变为 [batch_size, 1, seq_len]
-            print(f"Conv1D: Input reshaped from {orig_shape} to {x.shape}")
         elif len(x.shape) == 3 and x.shape[1] != self.input_channels:
             # 输入为 [batch_size, feature_dim, seq_len] 但特征维度不匹配
             if self.input_channels == 1:
                 # 如果期望单通道，则将所有特征合并为序列长度
                 batch_size = x.shape[0]
                 x = x.view(batch_size, 1, -1)
-                print(f"Conv1D: Input features merged - reshaped from {orig_shape} to {x.shape}")
             else:
                 # 如果期望多通道，但维度不匹配，输出错误信息
                 raise ValueError(f"Conv1D: Expected input_channels={self.input_channels}, got {x.shape[1]}")

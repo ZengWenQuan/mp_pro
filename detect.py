@@ -162,12 +162,13 @@ def load_model(weights_path, config=None):
     return model, model_name
 
 
-def load_input_data(input_path):
+def load_input_data(input_path, config=None):
     """
     Load input data for prediction
     
     Args:
         input_path: Path to input data file or directory
+        config: Optional configuration dictionary
         
     Returns:
         data: Input data as numpy array
@@ -175,25 +176,28 @@ def load_input_data(input_path):
     """
     if os.path.isdir(input_path):
         print(f"Loading data from directory: {input_path}")
-        # 如果是目录，检查是否有features.csv文件
-        features_path = os.path.join(input_path, 'features.csv')
+        # 如果提供了配置，使用配置中的文件名
+        features_file = config['data'].get('features_file', 'features.csv') if config else 'features.csv'
+        features_path = os.path.join(input_path, features_file)
+        
         if os.path.exists(features_path):
             df = pd.read_csv(features_path)
             print(f"Loaded {len(df)} samples from {features_path}")
             
             # 提取obsid列（如果存在）
-            obsids = df['obsid'].values if 'obsid' in df.columns else None
+            id_column = config['data'].get('id_column', 'obsid') if config else 'obsid'
+            obsids = df[id_column].values if id_column in df.columns else None
             
             # 移除非特征列（如obsid）
-            if 'obsid' in df.columns:
-                features_df = df.drop(columns=['obsid'])
+            if id_column in df.columns:
+                features_df = df.drop(columns=[id_column])
                 data = features_df.values
             else:
                 data = df.values
                 
             return data, obsids
         else:
-            raise FileNotFoundError(f"Could not find features.csv in {input_path}")
+            raise FileNotFoundError(f"Could not find {features_file} in {input_path}")
     else:
         print(f"Loading data from file: {input_path}")
         # 处理单个CSV文件
@@ -202,18 +206,19 @@ def load_input_data(input_path):
             print(f"Loaded {len(df)} samples from {input_path}")
             
             # 提取obsid列（如果存在）
-            obsids = df['obsid'].values if 'obsid' in df.columns else None
+            id_column = config['data'].get('id_column', 'obsid') if config else 'obsid'
+            obsids = df[id_column].values if id_column in df.columns else None
             
             # 移除非特征列（如obsid）
-            if 'obsid' in df.columns:
-                features_df = df.drop(columns=['obsid'])
+            if id_column in df.columns:
+                features_df = df.drop(columns=[id_column])
                 data = features_df.values
             else:
                 data = df.values
-                
+            
             return data, obsids
         else:
-            raise ValueError(f"Unsupported file format: {input_path}")
+            raise ValueError("Input file must be a CSV file")
 
 
 def predict(model, data, model_name, batch_size=16, feature_normalizer=None, label_normalizer=None):
@@ -374,7 +379,7 @@ def main():
     model, model_name = load_model(args.weights, config)
     
     # Load input data
-    data, obsids = load_input_data(args.input)
+    data, obsids = load_input_data(args.input, config)
     
     # 查找并加载归一化参数
     model_dir = Path(args.weights).parent.parent
