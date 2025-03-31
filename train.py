@@ -64,8 +64,8 @@ def load_data(data_cfg):
     # 获取ID列名
     id_column = data_cfg.get('id_column', 'obsid')
     
-    # 获取要使用的特征列表
-    features = data_cfg.get('features', ['logg', 'feh', 'teff'])
+    # 获取要使用的标签列表
+    labels = data_cfg.get('labels', ['logg', 'feh', 'teff'])
     use_all_features = data_cfg.get('use_all_features', True)
     
     # 加载训练集
@@ -92,10 +92,10 @@ def load_data(data_cfg):
         feature_columns = [col for col in train_features.columns if col != id_column]
     else:
         # 只使用指定的特征列
-        feature_columns = features
+        feature_columns = labels
     
     # 获取标签列
-    label_columns = features
+    label_columns = labels
     
     # 只输出标签名，不输出特征名
     print(f"Using labels: {label_columns}")
@@ -256,8 +256,8 @@ def main():
     # 保存特征列和标签列以供后续使用
     with open(norm_dir / 'columns.json', 'w') as f:
         json.dump({
-            'feature_columns': feature_columns,
-            'label_columns': label_columns
+            'input_feature_columns': feature_columns,
+            'output_label_columns': label_columns
         }, f)
     
     # Create trainer

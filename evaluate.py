@@ -76,8 +76,8 @@ def load_data(data_cfg):
     # 获取ID列名
     id_column = data_cfg.get('id_column', 'obsid')
     
-    # 获取要使用的特征列表
-    features = data_cfg.get('features', ['logg', 'feh', 'teff'])
+    # 获取要使用的标签列表
+    labels = data_cfg.get('labels', ['logg', 'feh', 'teff'])
     use_all_features = data_cfg.get('use_all_features', True)
     
     # 加载测试集
@@ -96,10 +96,10 @@ def load_data(data_cfg):
         feature_columns = [col for col in test_features.columns if col != id_column]
     else:
         # 只使用指定的特征列
-        feature_columns = features
+        feature_columns = labels
     
     # 获取标签列
-    label_columns = features
+    label_columns = labels
     
     print(f"使用特征: {feature_columns}")
     print(f"使用标签: {label_columns}")
@@ -281,6 +281,16 @@ def main():
     # 查找归一化参数文件
     model_dir = Path(args.model_path).parent.parent
     norm_dir = model_dir / 'normalization'
+    
+    # 检查是否有保存的列名定义
+    if os.path.exists(norm_dir / 'columns.json'):
+        with open(norm_dir / 'columns.json', 'r') as f:
+            columns = json.load(f)
+            saved_label_columns = columns.get('output_label_columns', columns.get('label_columns', None))
+            if saved_label_columns and set(saved_label_columns) == set(label_columns):
+                print(f"验证: 使用的标签列与保存的标签列匹配")
+            elif saved_label_columns:
+                print(f"警告: 当前标签列 {label_columns} 与保存的标签列 {saved_label_columns} 不匹配")
     
     # 加载特征归一化器
     feature_normalizer = None

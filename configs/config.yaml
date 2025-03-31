@@ -22,7 +22,7 @@ data:
   test_split: 0.1
   num_workers: 4
   id_column: obsid  # 用于关联特征和标签文件的ID
-  features:
+  labels:
     - logg  # Surface gravity
     - feh   # Metallicity
     - teff  # Effective temperature

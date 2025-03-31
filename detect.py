@@ -301,7 +301,8 @@ def main():
     if os.path.exists(norm_dir / 'columns.json'):
         with open(norm_dir / 'columns.json', 'r') as f:
             columns = json.load(f)
-            label_columns = columns.get('label_columns', None)
+            # 使用新的键名，同时保持向后兼容性
+            label_columns = columns.get('output_label_columns', columns.get('label_columns', None))
     
     # 加载特征归一化器
     feature_normalizer = None
