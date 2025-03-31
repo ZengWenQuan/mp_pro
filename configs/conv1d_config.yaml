@@ -6,9 +6,9 @@ model:
   output_dim: 3  # 预测三个特征：logg, feh, teff
   dropout_rate: 0.2
   # Conv1D特有参数
-  channels: [32, 64, 128]  # 卷积层通道数
-  kernel_sizes: [3, 3, 3]  # 卷积核大小
-  fc_dims: [256, 128]  # 全连接层维度
+  channels: [32, 64, 128, 256, 512]  # 卷积层通道数，增加到5层
+  kernel_sizes: [3, 3, 3, 3, 3]  # 卷积核大小，增加到5层
+  fc_dims: [512, 256]  # 全连接层维度，增加最大维度以适应更多的特征
 
 # Data Configuration
 data:

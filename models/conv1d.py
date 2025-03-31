@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.init as init
 
 class Conv1D(nn.Module):
     def __init__(self, input_channels=1, seq_len=64, num_classes=1, 
@@ -22,6 +23,13 @@ class Conv1D(nn.Module):
         # 保存输入参数
         self.input_channels = input_channels
         
+        # 确保序列长度是2的幂次方的最小整数
+        # 这样可以避免序列长度过小导致MaxPool1d后长度为0的问题
+        min_seq_len = 2 ** len(channels)  # 最小需要的序列长度
+        if seq_len < min_seq_len:
+            seq_len = min_seq_len
+            print(f"Warning: seq_len too small, adjusted to {seq_len}")
+        
         # Convolutional layers
         conv_layers = []
         in_channels = input_channels
@@ -34,14 +42,6 @@ class Conv1D(nn.Module):
             in_channels = out_channels
         
         self.conv_layers = nn.Sequential(*conv_layers)
-        
-        # Calculate size after convolutions and pooling
-        # 确保序列长度是2的幂次方的最小整数
-        # 这样可以避免序列长度过小导致MaxPool1d后长度为0的问题
-        min_seq_len = 2 ** len(channels)  # 最小需要的序列长度
-        if seq_len < min_seq_len:
-            seq_len = min_seq_len
-            print(f"Warning: seq_len too small, adjusted to {seq_len}")
         
         # 计算卷积和池化后的输出大小
         output_size = seq_len
@@ -61,6 +61,27 @@ class Conv1D(nn.Module):
         fc_layers.append(nn.Linear(fc_in_dim, num_classes))
         
         self.fc_layers = nn.Sequential(*fc_layers)
+        
+        # 使用Kaiming初始化所有卷积层和线性层
+        self._initialize_weights()
+    
+    def _initialize_weights(self):
+        """初始化模型权重使用Kaiming初始化"""
+        for m in self.modules():
+            if isinstance(m, nn.Conv1d):
+                # 对于卷积层使用Kaiming初始化
+                init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
+            elif isinstance(m, nn.BatchNorm1d):
+                # 对于批标准化层，权重初始化为1，偏置初始化为0
+                init.constant_(m.weight, 1)
+                init.constant_(m.bias, 0)
+            elif isinstance(m, nn.Linear):
+                # 对于线性层使用Kaiming初始化
+                init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
     
     def forward(self, x):
         """Forward pass"""

@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 
-from utils.general import save_checkpoint, plot_loss_curve
+from utils.general import plot_loss_curve
 
 
 class Trainer:
@@ -133,8 +133,8 @@ class Trainer:
         
         print(f"Loaded checkpoint from {checkpoint_path} (epoch {checkpoint['epoch']})")
     
-    def _save_checkpoint(self, epoch, is_best=False):
-        """Save checkpoint"""
+    def _save_checkpoint(self, epoch, is_best=False, filename=None):
+        """保存检查点"""
         state = {
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
@@ -148,8 +148,36 @@ class Trainer:
         if self.scheduler:
             state['scheduler_state_dict'] = self.scheduler.state_dict()
         
-        filename = f"checkpoint_epoch{epoch}.pt"
-        save_checkpoint(state, is_best, self.experiment_dir, filename)
+        if filename is None:
+            filename = f"checkpoint_epoch{epoch+1}.pt"
+        
+        # 保存checkpoint文件
+        checkpoint_path = Path(self.experiment_dir) / 'weights' / filename
+        torch.save(state, checkpoint_path)
+        
+        # 如果是最佳模型，还保存为best.pt
+        if is_best:
+            best_path = Path(self.experiment_dir) / 'weights' / 'best.pt'
+            torch.save(state, best_path)
+    
+    def _save_best_only(self, epoch):
+        """只保存最佳模型，不保存checkpoint"""
+        state = {
+            'epoch': epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'best_val_loss': self.best_val_loss,
+            'train_losses': self.train_losses,
+            'val_losses': self.val_losses,
+            'model_config': self.config.get('model_config', {})
+        }
+        
+        if self.scheduler:
+            state['scheduler_state_dict'] = self.scheduler.state_dict()
+        
+        # 只保存best.pt
+        best_path = Path(self.experiment_dir) / 'weights' / 'best.pt'
+        torch.save(state, best_path)
     
     def train_epoch(self, epoch):
         """Train for one epoch"""
@@ -291,6 +319,7 @@ class Trainer:
         print(f"Training on device: {self.device}")
         print(f"Starting from epoch {self.start_epoch}")
         print(f"TensorBoard logs will be saved to: {self.tb_log_dir}")
+        print(f"每10个epoch保存一次checkpoint，每个epoch都会检查并保存best.pt")
         
         # 记录模型架构到TensorBoard
         try:
@@ -323,13 +352,24 @@ class Trainer:
                 else:
                     self.scheduler.step()
             
-            # Save checkpoint
+            # 检查是否为最佳模型
             is_best = val_loss < self.best_val_loss
             if is_best:
                 self.best_val_loss = val_loss
                 self.writer.add_scalar('Best/ValidationLoss', val_loss, epoch)
+                print(f"发现新的最佳模型! 验证损失: {val_loss:.4f}")
             
-            self._save_checkpoint(epoch, is_best)
+            # 每个epoch都保存best.pt (如果是最佳模型)
+            # 但只有每10个epoch才保存checkpoint
+            if (epoch + 1) % 10 == 0:
+                # 每10个epoch保存一次checkpoint
+                filename = f"checkpoint_epoch{epoch+1}.pt"
+                self._save_checkpoint(epoch, is_best, filename)
+                print(f"已保存checkpoint: {filename}")
+            elif is_best:
+                # 如果是最佳模型但不是10的倍数epoch，只保存best.pt
+                self._save_best_only(epoch)
+                print(f"已保存best.pt (epoch {epoch+1})")
             
             # Plot loss curves
             plot_loss_curve(
