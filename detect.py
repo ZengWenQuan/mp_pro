@@ -12,7 +12,7 @@ import json
 plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans', 'sans-serif']
 plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
 
-from models import MLP, Conv1D
+from models import MLP, Conv1D, LSTM, SpectralTransformer
 from utils.general import load_config, get_device
 from utils.dataset import Normalizer
 
@@ -54,49 +54,107 @@ def load_model(weights_path, config=None):
             state_dict = checkpoint['model_state_dict']
             keys = list(state_dict.keys())
             
-            if any('conv' in key for key in keys):
+            if any('lstm' in key for key in keys):
+                model_name = 'lstm'
+                model_cfg = {
+                    'input_dim': 64,  # 会根据实际数据调整
+                    'hidden_dim': 128,
+                    'num_layers': 2,
+                    'bidirectional': True,
+                    'output_dim': 3,
+                    'dropout_rate': 0.0  # No dropout during inference
+                }
+            elif any('transformer' in key for key in keys):
+                model_name = 'transformer'
+                model_cfg = {
+                    'input_dim': 64,  # 会根据实际数据调整
+                    'd_model': 128,
+                    'nhead': 8,
+                    'num_layers': 3,
+                    'dim_feedforward': 512,
+                    'output_dim': 3,
+                    'dropout_rate': 0.0  # No dropout during inference
+                }
+            elif any('conv' in key for key in keys):
                 model_name = 'conv1d'
                 model_cfg = {
-                    'input_channels': 1,
-                    'seq_len': 64,
-                    'num_classes': 1,
-                    'channels': [32, 64, 128],
-                    'kernel_sizes': [3, 3, 3],
-                    'fc_dims': [256, 128],
+                    'input_dim': 64,  # 会根据实际数据调整
+                    'channels': [32, 64, 128, 256, 512],
+                    'kernel_sizes': [3, 3, 3, 3, 3],
+                    'fc_dims': [512, 256],
+                    'output_dim': 3,
                     'dropout_rate': 0.0  # No dropout during inference
                 }
             else:
                 model_name = 'mlp'
                 model_cfg = {
-                    'input_dim': 64,
+                    'input_dim': 64,  # 会根据实际数据调整
                     'hidden_dims': [128, 256, 128],
-                    'output_dim': 1,
+                    'output_dim': 3,
                     'dropout_rate': 0.0  # No dropout during inference
                 }
+    
+    # 获取输入和输出维度
+    input_dim = model_cfg.get('input_dim', 64)
+    output_dim = model_cfg.get('output_dim', 3)
+    
+    print(f"加载{model_name}模型，输入维度: {input_dim}, 输出维度: {output_dim}")
     
     # Create model
     if model_name == 'mlp':
         model = MLP(
-            input_dim=model_cfg.get('input_dim', 64),
+            input_dim=input_dim,
             hidden_dims=model_cfg.get('hidden_dims', [128, 256, 128]),
-            output_dim=model_cfg.get('output_dim', 1),
+            output_dim=output_dim,
             dropout_rate=model_cfg.get('dropout_rate', 0.0)
         )
     elif model_name == 'conv1d':
         model = Conv1D(
-            input_channels=model_cfg.get('input_channels', 1),
-            seq_len=model_cfg.get('seq_len', 64),
-            num_classes=model_cfg.get('num_classes', 1),
-            channels=model_cfg.get('channels', [32, 64, 128]),
-            kernel_sizes=model_cfg.get('kernel_sizes', [3, 3, 3]),
-            fc_dims=model_cfg.get('fc_dims', [256, 128]),
+            input_channels=1,  # 固定为1，特征将在forward中重新排列
+            seq_len=input_dim,  # 使用输入维度作为序列长度
+            num_classes=output_dim,
+            channels=model_cfg.get('channels', [32, 64, 128, 256, 512]),
+            kernel_sizes=model_cfg.get('kernel_sizes', [3, 3, 3, 3, 3]),
+            fc_dims=model_cfg.get('fc_dims', [512, 256]),
             dropout_rate=model_cfg.get('dropout_rate', 0.0)
+        )
+    elif model_name == 'lstm':
+        model = LSTM(
+            input_dim=1,  # 固定为1，光谱数据每个时间点一个特征值
+            hidden_dim=model_cfg.get('hidden_dim', 128),
+            num_layers=model_cfg.get('num_layers', 2),
+            bidirectional=model_cfg.get('bidirectional', True),
+            dropout_rate=model_cfg.get('dropout_rate', 0.0),
+            output_dim=output_dim
+        )
+    elif model_name == 'transformer':
+        model = SpectralTransformer(
+            input_dim=1,  # 固定为1，光谱数据每个时间点一个特征值
+            d_model=model_cfg.get('d_model', 128),
+            nhead=model_cfg.get('nhead', 8),
+            num_layers=model_cfg.get('num_layers', 3),
+            dim_feedforward=model_cfg.get('dim_feedforward', 512),
+            dropout_rate=model_cfg.get('dropout_rate', 0.0),
+            output_dim=output_dim
         )
     else:
         raise ValueError(f"Unsupported model: {model_name}")
     
+    # 打印模型结构概要
+    print(f"模型结构总结:")
+    print(f"  参数总数: {sum(p.numel() for p in model.parameters())}")
+    print(f"  可训练参数: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
+    
     # Load weights
-    model.load_state_dict(checkpoint['model_state_dict'])
+    try:
+        model.load_state_dict(checkpoint['model_state_dict'])
+        print("模型权重加载成功")
+    except Exception as e:
+        print(f"加载模型权重时出错: {e}")
+        print("尝试使用非严格模式加载...")
+        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+        print("模型权重已加载（非严格模式）")
+    
     model = model.to(device)
     model.eval()
     
@@ -162,34 +220,60 @@ def predict(model, data, model_name, batch_size=16, feature_normalizer=None, lab
     """Run prediction on input data"""
     device = get_device()
     
+    # 打印原始数据信息
+    print(f"原始数据类型: {type(data)}, 形状: {data.shape if isinstance(data, np.ndarray) else 'unknown'}")
+    
     # Convert data to tensor
     if isinstance(data, np.ndarray):
         # 应用特征归一化
         if feature_normalizer is not None:
+            print(f"应用特征归一化前数据范围: {np.min(data)} - {np.max(data)}")
             data = feature_normalizer.transform(data)
+            print(f"应用特征归一化后数据范围: {np.min(data)} - {np.max(data)}")
+        
+        # 转换为张量
         data = torch.tensor(data, dtype=torch.float32)
+        print(f"转换为张量后数据形状: {data.shape}")
     
-    # Prepare data based on model type
+    # 打印数据统计信息
+    print(f"数据统计: 最小值={data.min().item():.4f}, 最大值={data.max().item():.4f}, 均值={data.mean().item():.4f}, 标准差={data.std().item():.4f}")
+    
+    # 检查数据是否包含NaN或Inf
+    if torch.isnan(data).any() or torch.isinf(data).any():
+        print("警告: 数据中包含NaN或Inf值!")
+    
+    # 根据模型类型预处理数据
     if model_name == 'conv1d' and len(data.shape) == 2:
         # Add channel dimension for Conv1D
+        print(f"为Conv1D模型添加通道维度，将形状从{data.shape}更改为", end=" ")
         data = data.unsqueeze(1)
+        print(f"{data.shape}")
     
     # Run prediction in batches
     normalized_predictions = []
     with torch.no_grad():
         for i in range(0, len(data), batch_size):
             batch = data[i:i+batch_size].to(device)
-            output = model(batch)
-            normalized_predictions.append(output.cpu().numpy())
+            try:
+                output = model(batch)
+                normalized_predictions.append(output.cpu().numpy())
+            except RuntimeError as e:
+                print(f"预测过程中出错: {e}")
+                print(f"批次形状: {batch.shape}")
+                raise
     
     # Concatenate batch predictions
     normalized_predictions = np.concatenate(normalized_predictions, axis=0)
+    print(f"归一化预测结果形状: {normalized_predictions.shape}, 范围: {np.min(normalized_predictions)} - {np.max(normalized_predictions)}")
     
     # 将归一化的预测转换回原始尺度
     if label_normalizer is not None:
+        print(f"应用标签反归一化...")
         predictions = label_normalizer.inverse_transform(normalized_predictions)
+        print(f"反归一化后预测结果范围: {np.min(predictions)} - {np.max(predictions)}")
     else:
         predictions = normalized_predictions
+        print("警告: 未应用标签反归一化")
     
     return predictions
 

@@ -1,0 +1,38 @@
+# Model Configuration
+model:
+  name: transformer
+  input_dim: 1
+  d_model: 128
+  nhead: 8
+  num_layers: 3
+  dim_feedforward: 512
+  dropout_rate: 0.1
+  output_dim: 3  # 预测三个特征：logg, feh, teff
+
+# Data Configuration
+data:
+  data_size: 1000
+  seq_len: 64
+  feature_dim: 1
+  val_split: 0.2
+  test_split: 0.1
+  num_workers: 4
+  id_column: obsid
+  labels:
+    - logg  # Surface gravity
+    - feh   # Metallicity
+    - teff  # Effective temperature
+  use_all_features: true  # 使用特征文件中的所有特征
+
+# Training Configuration
+training:
+  batch_size: 32
+  epochs: 50
+  learning_rate: 0.0005  # Transformer通常使用较小的学习率
+  weight_decay: 0.0001
+  loss: mse  # Options: mse, mae, bce, ce
+  optimizer: adam  # Options: adam, sgd, rmsprop
+  scheduler: cosine  # Options: step, cosine, plateau, None
+  scheduler_params:
+    t_max: 50  # For cosine scheduler
+    warmup_steps: 10  # 学习率预热步数 

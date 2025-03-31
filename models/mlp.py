@@ -43,4 +43,26 @@ class MLP(nn.Module):
     
     def forward(self, x):
         """Forward pass"""
-        return self.model(x) 
+        # 打印输入形状，帮助调试
+        orig_shape = x.shape
+        
+        # MLP期望输入形状为 [batch_size, feature_dim]
+        if len(x.shape) == 3:
+            # 输入为 [batch_size, seq_len, feature_dim] 或 [batch_size, feature_dim, seq_len]
+            # 对于光谱数据，通常我们想要将序列或频道维度展平
+            batch_size = x.shape[0]
+            x = x.reshape(batch_size, -1)  # 展平为 [batch_size, seq_len*feature_dim]
+            print(f"MLP: Input flattened from {orig_shape} to {x.shape}")
+        
+        # 检查输入特征维度
+        if x.shape[1] != self.model[0].in_features:
+            print(f"MLP: 警告 - 输入特征维度 {x.shape[1]} 与模型期望的 {self.model[0].in_features} 不匹配")
+            # 我们可以尝试适应这种情况，但这里只是输出警告
+        
+        try:
+            return self.model(x)
+        except RuntimeError as e:
+            print(f"MLP前向传播错误: {e}")
+            print(f"输入形状: {x.shape}")
+            print(f"期望的输入特征: {self.model[0].in_features}")
+            raise 

@@ -12,7 +12,7 @@ import json
 from utils.general import seed_everything, load_config, create_exp_dir, get_device
 from utils.dataset import create_dataloaders, Normalizer
 from train.trainer import Trainer
-from models import MLP, Conv1D
+from models import MLP, Conv1D, LSTM, SpectralTransformer
 
 
 def parse_args():
@@ -32,29 +32,62 @@ def get_model(model_cfg):
     """Get model based on configuration"""
     model_name = model_cfg.get('name', 'mlp').lower()
     
+    # 获取输入和输出维度
+    input_dim = model_cfg.get('input_dim', 64)
+    output_dim = model_cfg.get('output_dim', 3)
+    
+    print(f"创建{model_name}模型，输入维度: {input_dim}, 输出维度: {output_dim}")
+    
     if model_name == 'mlp':
         model = MLP(
-            input_dim=model_cfg.get('input_dim', 64),
+            input_dim=input_dim,
             hidden_dims=model_cfg.get('hidden_dims', [128, 256, 128]),
-            output_dim=model_cfg.get('output_dim', 1),
+            output_dim=output_dim,
             dropout_rate=model_cfg.get('dropout_rate', 0.2)
         )
     
     elif model_name == 'conv1d':
         # 对于Conv1D模型，输入通道数始终为1，将特征数量作为序列长度
-        input_dim = model_cfg.get('input_dim', 64)
         model = Conv1D(
             input_channels=1,  # 固定为1，特征将在forward中重新排列
-            seq_len=input_dim,  # 使用特征数量作为序列长度
-            num_classes=model_cfg.get('output_dim', 1),
-            channels=model_cfg.get('channels', [32, 64, 128]),
-            kernel_sizes=model_cfg.get('kernel_sizes', [3, 3, 3]),
-            fc_dims=model_cfg.get('fc_dims', [256, 128]),
+            seq_len=input_dim,  # 使用输入维度作为序列长度
+            num_classes=output_dim,
+            channels=model_cfg.get('channels', [32, 64, 128, 256, 512]),
+            kernel_sizes=model_cfg.get('kernel_sizes', [3, 3, 3, 3, 3]),
+            fc_dims=model_cfg.get('fc_dims', [512, 256]),
             dropout_rate=model_cfg.get('dropout_rate', 0.2)
+        )
+    
+    elif model_name == 'lstm':
+        # 对于LSTM模型，我们假设输入特征维度为1（单通道），使用config.seq_len作为序列长度
+        model = LSTM(
+            input_dim=1,  # 固定为1，一般光谱数据每个时间点一个特征值
+            hidden_dim=model_cfg.get('hidden_dim', 128),
+            num_layers=model_cfg.get('num_layers', 2),
+            bidirectional=model_cfg.get('bidirectional', True),
+            dropout_rate=model_cfg.get('dropout_rate', 0.2),
+            output_dim=output_dim
+        )
+    
+    elif model_name == 'transformer':
+        # 对于Transformer模型，我们假设输入特征维度为1，使用config.seq_len作为序列长度
+        model = SpectralTransformer(
+            input_dim=1,  # 固定为1，光谱数据每个时间点一个特征值
+            d_model=model_cfg.get('d_model', 128),
+            nhead=model_cfg.get('nhead', 8),
+            num_layers=model_cfg.get('num_layers', 3),
+            dim_feedforward=model_cfg.get('dim_feedforward', 512),
+            dropout_rate=model_cfg.get('dropout_rate', 0.1),
+            output_dim=output_dim
         )
     
     else:
         raise ValueError(f"Unsupported model: {model_name}")
+    
+    # 打印模型结构概要
+    print(f"模型结构总结:")
+    print(f"  参数总数: {sum(p.numel() for p in model.parameters())}")
+    print(f"  可训练参数: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
     
     return model
 
