@@ -18,7 +18,7 @@ from models import MLP, Conv1D, LSTM, SpectralTransformer
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Training script for prediction model')
-    parser.add_argument('--config', type=str, default='configs/config.yaml',
+    parser.add_argument('--config', type=str, default='configs/lstm.yaml',
                         help='Path to config file')
     parser.add_argument('--pretrained', type=str, default=None,
                         help='Path to pretrained model weights')
@@ -300,6 +300,9 @@ def main():
     
     # 将模型配置添加到训练配置中
     config['training']['model_config'] = config['model']
+    
+    # 添加配置文件路径到训练配置中，用于模型评估
+    config['training']['config_path'] = args.config
     
     # 保存特征列和标签列以供后续使用
     with open(norm_dir / 'columns.json', 'w') as f:

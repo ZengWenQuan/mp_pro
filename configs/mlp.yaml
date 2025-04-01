@@ -36,6 +36,7 @@ training:
   loss: mse  # Options: mse, mae, bce, ce
   optimizer: adam  # Options: adam, sgd, rmsprop
   scheduler: cosine  # Options: step, cosine, plateau, None
+  early_stopping: -1  # -1 表示不启用早停机制，正整数表示早停的耐心值
   scheduler_params:
     t_max: 50  # For cosine scheduler
     # step_size: 10  # For step scheduler

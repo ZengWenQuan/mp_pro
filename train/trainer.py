@@ -5,6 +5,7 @@ from tqdm import tqdm
 import time
 import numpy as np
 import os
+import subprocess
 from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 
@@ -173,8 +174,8 @@ class Trainer:
             best_path = Path(self.experiment_dir) / 'weights' / 'best.pt'
             torch.save(state, best_path)
     
-    def _save_best_only(self, epoch):
-        """只保存最佳模型，不保存checkpoint"""
+    def _save_best_and_latest(self, epoch, is_best=False):
+        """只保存最佳模型和最新模型"""
         state = {
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),
@@ -188,9 +189,15 @@ class Trainer:
         if self.scheduler:
             state['scheduler_state_dict'] = self.scheduler.state_dict()
         
-        # 只保存best.pt
-        best_path = Path(self.experiment_dir) / 'weights' / 'best.pt'
-        torch.save(state, best_path)
+        # 保存最新模型为latest.pt
+        latest_path = Path(self.experiment_dir) / 'weights' / 'latest.pt'
+        torch.save(state, latest_path)
+        
+        # 如果是最佳模型，还保存为best.pt
+        if is_best:
+            best_path = Path(self.experiment_dir) / 'weights' / 'best.pt'
+            print(f"Saving best model to {best_path}")
+            torch.save(state, best_path)
     
     def _resume_from_checkpoint(self, checkpoint_path):
         """从断点恢复训练"""
@@ -218,6 +225,61 @@ class Trainer:
         self.val_losses = checkpoint.get('val_losses', [])
         
         print(f"Resumed training from epoch {self.start_epoch}")
+    
+    def evaluate_best_model(self):
+        """运行评估脚本来评估最优模型"""
+        print("\n=== 开始评估最优模型 ===")
+        
+        # 构建最优模型路径
+        best_model_path = Path(self.experiment_dir) / 'weights' / 'best.pt'
+        if not os.path.exists(best_model_path):
+            print(f"最优模型文件不存在: {best_model_path}")
+            return
+        
+        # 构建评估结果保存路径
+        output_dir = self.experiment_dir / 'evaluation'
+        
+        # 构建评估命令
+        cmd = [
+            "python", "run_evaluate.py",
+            "--model-path", str(best_model_path),
+            "--output-dir", str(output_dir)
+        ]
+        
+        # 如果配置中有config_path，使用它；否则尝试根据实验目录推断配置文件
+        if "config_path" in self.config:
+            config_path = self.config["config_path"]
+            cmd.extend(["--config", config_path])
+            print(f"使用配置文件: {config_path}")
+        else:
+            # 没有配置路径时，尝试从实验目录名推断模型类型，并使用对应配置
+            exp_dir_name = self.experiment_dir.name
+            model_type = None
+            
+            # 尝试从实验目录名推断模型类型
+            for model_type_name in ['mlp', 'lstm', 'conv1d', 'transformer']:
+                if model_type_name in exp_dir_name.lower():
+                    model_type = model_type_name
+                    break
+            
+            if model_type:
+                inferred_config = f"configs/{model_type}.yaml"
+                if os.path.exists(inferred_config):
+                    cmd.extend(["--config", inferred_config])
+                    print(f"推断使用配置文件: {inferred_config}")
+                else:
+                    print(f"警告: 推断的配置文件 {inferred_config} 不存在")
+            else:
+                print("警告: 无法从实验目录名推断模型类型，评估可能失败")
+        
+        # 打印命令
+        print("执行评估命令:")
+        print(" ".join(cmd))
+        
+        # 运行评估脚本
+        subprocess.call(cmd)
+        
+        print(f"评估完成，结果保存在: {output_dir}")
     
     def train_epoch(self, epoch):
         """Train for one epoch"""
@@ -360,15 +422,12 @@ class Trainer:
             if is_best:
                 best_val_loss = val_loss
                 best_epoch = epoch
-                # 保存最佳模型
-                self._save_checkpoint(epoch, is_best=True)
                 patience_counter = 0
             else:
                 patience_counter += 1
             
-            # 每10轮保存一次常规检查点
-            if (epoch + 1) % 10 == 0:
-                self._save_checkpoint(epoch, is_best=False)
+            # 保存最佳模型和最新模型
+            self._save_best_and_latest(epoch, is_best=is_best)
             
             # 更新学习率
             if self.scheduler:
@@ -377,7 +436,21 @@ class Trainer:
             # 记录损失
             self.train_losses.append(train_loss)
             self.val_losses.append(val_loss)
+                        # 输出当前epoch的详细信息
+            print(f"\nEpoch {epoch+1}/{self.config['epochs']} Summary:")
+            print(f"Training Loss: {train_loss:.4f}")
+            print(f"Validation Loss: {val_loss:.4f}")
+            if self.scheduler:
+                current_lr = self.optimizer.param_groups[0]['lr']
+                print(f"Learning Rate: {current_lr:.6f}")
             
+            # 绘制损失曲线
+            plot_loss_curve(
+                self.train_losses, 
+                self.val_losses, 
+                save_path=str(self.experiment_dir / 'plots' / 'loss_curve.png')
+            )
+
             # 更新进度条
             pbar.set_postfix({
                 'train_loss': f'{train_loss:.4f}',
@@ -386,7 +459,8 @@ class Trainer:
             })
             
             # 早停检查
-            if patience_counter >= self.config.get('early_stopping', 10):
+            early_stopping = self.config.get('early_stopping', 10)
+            if early_stopping > 0 and patience_counter >= early_stopping:
                 print(f"\nEarly stopping triggered after {epoch + 1} epochs")
                 break
         
@@ -394,5 +468,8 @@ class Trainer:
         if best_model_path:
             self._load_checkpoint(best_model_path)
             print(f"\nLoaded best model from epoch {best_epoch + 1}")
+        
+        # 训练结束后，自动评估最优模型
+        self.evaluate_best_model()
         
         return best_val_loss 
