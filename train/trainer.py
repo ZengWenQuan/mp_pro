@@ -276,7 +276,7 @@ class Trainer:
         avg_loss = total_loss / len(self.train_loader)
         self.train_losses.append(avg_loss)
         
-        return avg_loss
+        return avg_loss, all_outputs, all_targets
     
     def validate(self, epoch):
         """Validate model"""
@@ -332,21 +332,28 @@ class Trainer:
             mse = np.mean((all_outputs[:, i] - all_targets[:, i]) ** 2)
             self.writer.add_scalar(f'Validation/MSE_Feature{i+1}', mse, epoch)
         
-        return avg_loss
+        return avg_loss, all_outputs, all_targets
     
     def train(self):
         """训练模型"""
+        # 初始化训练状态
         best_val_loss = float('inf')
-        best_model_path = None
-        patience_counter = 0
         best_epoch = 0
+        patience_counter = 0
+        best_model_path = None
         
-        for epoch in range(self.start_epoch, self.config['epochs']):
+        # 创建进度条
+        pbar = tqdm(range(self.start_epoch, self.config['epochs']), 
+                    desc='Training', 
+                    leave=True, 
+                    position=0)
+        
+        for epoch in pbar:
             # 训练一个epoch
-            train_loss = self.train_epoch(epoch)
+            train_loss, train_outputs, train_targets = self.train_epoch(epoch)
             
             # 验证
-            val_loss = self.validate(epoch)
+            val_loss, val_outputs, val_targets = self.validate(epoch)
             
             # 检查是否是最佳模型
             is_best = val_loss < best_val_loss
@@ -365,34 +372,27 @@ class Trainer:
             
             # 更新学习率
             if self.scheduler:
-                if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
-                    self.scheduler.step(val_loss)
-                else:
-                    self.scheduler.step()
+                self.scheduler.step()
             
             # 记录损失
             self.train_losses.append(train_loss)
             self.val_losses.append(val_loss)
             
-            # 输出当前epoch的详细信息
-            print(f"\nEpoch {epoch+1}/{self.config['epochs']} Summary:")
-            print(f"Training Loss: {train_loss:.4f}")
-            print(f"Validation Loss: {val_loss:.4f}")
-            if self.scheduler:
-                current_lr = self.optimizer.param_groups[0]['lr']
-                print(f"Learning Rate: {current_lr:.6f}")
-            
-            # 绘制损失曲线
-            plot_loss_curve(
-                self.train_losses, 
-                self.val_losses, 
-                save_path=str(self.experiment_dir / 'plots' / 'loss_curve.png')
-            )
+            # 更新进度条
+            pbar.set_postfix({
+                'train_loss': f'{train_loss:.4f}',
+                'val_loss': f'{val_loss:.4f}',
+                'best_val_loss': f'{best_val_loss:.4f}'
+            })
             
             # 早停检查
-            if patience_counter >= self.config.get('patience', 10):
+            if patience_counter >= self.config.get('early_stopping', 10):
                 print(f"\nEarly stopping triggered after {epoch + 1} epochs")
                 break
         
-        # 训练完成后返回最佳验证损失
+        # 训练结束，加载最佳模型
+        if best_model_path:
+            self._load_checkpoint(best_model_path)
+            print(f"\nLoaded best model from epoch {best_epoch + 1}")
+        
         return best_val_loss 

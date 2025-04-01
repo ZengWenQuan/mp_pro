@@ -33,7 +33,7 @@ class PositionalEncoding(nn.Module):
 
 class SpectralTransformer(nn.Module):
     def __init__(self, input_dim=1, d_model=128, nhead=8, num_layers=3, 
-                 dim_feedforward=512, dropout_rate=0.1, output_dim=3):
+                 dim_feedforward=512, dropout_rate=0.1, output_dim=3, batch_norm=False):
         """
         基于Transformer的光谱预测模型
         
@@ -45,10 +45,12 @@ class SpectralTransformer(nn.Module):
             dim_feedforward: 前馈网络维度
             dropout_rate: Dropout概率
             output_dim: 输出维度（预测标签数量）
+            batch_norm: 是否使用BatchNormalization
         """
         super(SpectralTransformer, self).__init__()
         
         self.input_dim = input_dim
+        self.batch_norm = batch_norm
         
         # 输入嵌入层
         self.embedding = nn.Linear(input_dim, d_model)
@@ -76,6 +78,9 @@ class SpectralTransformer(nn.Module):
         
         # 初始化权重
         self._initialize_weights()
+        
+        if batch_norm:
+            self.output_bn = nn.BatchNorm1d(d_model)
     
     def _initialize_weights(self):
         """初始化模型权重"""
@@ -123,5 +128,8 @@ class SpectralTransformer(nn.Module):
         
         # 输出层
         output = self.output_layer(x)
+        
+        if self.batch_norm:
+            output = self.output_bn(output)
         
         return output 

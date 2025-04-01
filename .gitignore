@@ -41,3 +41,5 @@ predictions/
 .DS_Store
 
 data/
+
+scrip.ipynb

@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.init as init
 
 class MLP(nn.Module):
-    def __init__(self, input_dim=64, hidden_dims=[128, 256, 128], output_dim=1, dropout_rate=0.2):
+    def __init__(self, input_dim=64, hidden_dims=[128, 256, 128], output_dim=1, dropout_rate=0.2, batch_norm=False):
         """
         Simple MLP model for prediction
         
@@ -12,20 +12,24 @@ class MLP(nn.Module):
             hidden_dims: List of hidden layer dimensions
             output_dim: Output dimension size
             dropout_rate: Dropout probability
+            batch_norm: Whether to use batch normalization
         """
-        super(MLP, self).__init__()
+        super().__init__()
         
-        # Build layers
         layers = []
-        dims = [input_dim] + hidden_dims
+        prev_dim = input_dim
         
-        for i in range(len(dims)-1):
-            layers.append(nn.Linear(dims[i], dims[i+1]))
+        # 构建隐藏层
+        for dim in hidden_dims:
+            layers.append(nn.Linear(prev_dim, dim))
+            if batch_norm:
+                layers.append(nn.BatchNorm1d(dim))
             layers.append(nn.ReLU())
             layers.append(nn.Dropout(dropout_rate))
+            prev_dim = dim
         
-        # Output layer
-        layers.append(nn.Linear(dims[-1], output_dim))
+        # 输出层
+        layers.append(nn.Linear(prev_dim, output_dim))
         
         self.model = nn.Sequential(*layers)
         

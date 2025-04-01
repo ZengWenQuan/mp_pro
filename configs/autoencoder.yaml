@@ -1,0 +1,7 @@
+model:
+  name: 'autoencoder'
+  input_dim: 64
+  hidden_dims: [32, 16, 8]
+  latent_dim: 4
+  dropout_rate: 0.2
+  batch_norm: true  # 添加BatchNorm配置 

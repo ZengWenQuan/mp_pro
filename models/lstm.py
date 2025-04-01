@@ -4,7 +4,7 @@ import torch.nn.init as init
 
 class LSTM(nn.Module):
     def __init__(self, input_dim=1, hidden_dim=128, num_layers=2, 
-                 bidirectional=True, dropout_rate=0.2, output_dim=3):
+                 bidirectional=True, dropout_rate=0.2, output_dim=3, batch_norm=False):
         """
         LSTM模型用于光谱序列预测
         
@@ -15,6 +15,7 @@ class LSTM(nn.Module):
             bidirectional: 是否使用双向LSTM
             dropout_rate: Dropout概率
             output_dim: 输出维度（预测标签数量）
+            batch_norm: 是否使用Batch Normalization
         """
         super(LSTM, self).__init__()
         
@@ -23,6 +24,7 @@ class LSTM(nn.Module):
         self.num_layers = num_layers
         self.bidirectional = bidirectional
         self.num_directions = 2 if bidirectional else 1
+        self.batch_norm = batch_norm
         
         # LSTM层
         self.lstm = nn.LSTM(
@@ -33,6 +35,9 @@ class LSTM(nn.Module):
             bidirectional=bidirectional,
             dropout=dropout_rate if num_layers > 1 else 0
         )
+        
+        if batch_norm:
+            self.bn = nn.BatchNorm1d(hidden_dim * self.num_directions)
         
         # 全连接层
         fc_input_dim = hidden_dim * self.num_directions
@@ -89,6 +94,10 @@ class LSTM(nn.Module):
         
         # 使用最后一个时间步的输出
         last_hidden = lstm_out[:, -1, :]
+        
+        # 应用BatchNorm（如果启用）
+        if self.batch_norm:
+            last_hidden = self.bn(last_hidden)
         
         # 全连接层
         output = self.fc(last_hidden)

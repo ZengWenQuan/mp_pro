@@ -9,12 +9,14 @@ model:
   channels: [32, 64, 128, 256, 512]  # 卷积层通道数，增加到5层
   kernel_sizes: [3, 3, 3, 3, 3]  # 卷积核大小，增加到5层
   fc_dims: [512, 256]  # 全连接层维度，增加最大维度以适应更多的特征
+  batch_norm: true  # 添加BatchNorm配置
 
 # Data Configuration
 data:
   train_dir: data/train  # 训练数据目录
   test_dir: data/test   # 测试数据目录
-  features_file: features_filtered_501features.csv  # 特征文件名
+  # features_file: features_filtered_501features.csv  # 特征文件名
+  features_file: features.csv  # 特征文件名
   labels_file: labels.csv     # 标签文件名
   data_size: 1000
   seq_len: 64

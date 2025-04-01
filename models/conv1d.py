@@ -5,7 +5,7 @@ import torch.nn.init as init
 class Conv1D(nn.Module):
     def __init__(self, input_channels=1, seq_len=64, num_classes=1, 
                  channels=[32, 64, 128], kernel_sizes=[3, 3, 3], 
-                 fc_dims=[256, 128], dropout_rate=0.2):
+                 fc_dims=[256, 128], dropout_rate=0.2, batch_norm=False):
         """
         Simple 1D Convolutional Neural Network for sequence prediction
         
@@ -17,6 +17,7 @@ class Conv1D(nn.Module):
             kernel_sizes: List of kernel sizes for each conv layer
             fc_dims: List of fully connected layer dimensions
             dropout_rate: Dropout probability
+            batch_norm: Whether to use batch normalization
         """
         super(Conv1D, self).__init__()
         
@@ -31,34 +32,34 @@ class Conv1D(nn.Module):
             print(f"Warning: seq_len too small, adjusted to {seq_len}")
         
         # Convolutional layers
-        conv_layers = []
+        layers = []
         in_channels = input_channels
         
-        for i, (out_channels, kernel_size) in enumerate(zip(channels, kernel_sizes)):
-            conv_layers.append(nn.Conv1d(in_channels, out_channels, kernel_size, padding=kernel_size//2))
-            conv_layers.append(nn.BatchNorm1d(out_channels))
-            conv_layers.append(nn.ReLU())
-            conv_layers.append(nn.MaxPool1d(2))
+        for out_channels, kernel_size in zip(channels, kernel_sizes):
+            layers.append(nn.Conv1d(in_channels, out_channels, kernel_size, padding=kernel_size//2))
+            if batch_norm:
+                layers.append(nn.BatchNorm1d(out_channels))
+            layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout_rate))
             in_channels = out_channels
         
-        self.conv_layers = nn.Sequential(*conv_layers)
+        self.conv_layers = nn.Sequential(*layers)
         
-        # 计算卷积和池化后的输出大小
-        output_size = seq_len
-        for _ in range(len(channels)):
-            output_size = output_size // 2  # MaxPool1d with kernel_size=2
+        # 计算卷积层输出大小
+        self.conv_output_size = channels[-1] * (seq_len // (2 ** len(channels)))
         
         # Fully connected layers
         fc_layers = []
-        fc_in_dim = channels[-1] * output_size
-        
-        for fc_dim in fc_dims:
-            fc_layers.append(nn.Linear(fc_in_dim, fc_dim))
+        prev_dim = self.conv_output_size
+        for dim in fc_dims:
+            fc_layers.append(nn.Linear(prev_dim, dim))
+            if batch_norm:
+                fc_layers.append(nn.BatchNorm1d(dim))
             fc_layers.append(nn.ReLU())
             fc_layers.append(nn.Dropout(dropout_rate))
-            fc_in_dim = fc_dim
+            prev_dim = dim
         
-        fc_layers.append(nn.Linear(fc_in_dim, num_classes))
+        fc_layers.append(nn.Linear(prev_dim, num_classes))
         
         self.fc_layers = nn.Sequential(*fc_layers)
         
