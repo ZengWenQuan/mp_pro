@@ -1,6 +1,4 @@
-from .mlp import MLP
-from .conv1d import Conv1D
-from .lstm import LSTM
-from .transformer import SpectralTransformer
+from .model import MLP, Conv1D, LSTM, SpectralTransformer, Autoencoder
+from .loss import L1Loss
 
-__all__ = ['MLP', 'Conv1D', 'LSTM', 'SpectralTransformer'] 
+__all__ = ['MLP', 'Conv1D', 'LSTM', 'SpectralTransformer', 'Autoencoder', 'L1Loss'] 

@@ -13,7 +13,7 @@ from tqdm import tqdm
 from utils.general import seed_everything, load_config, create_exp_dir, get_device
 from utils.dataset import create_dataloaders, Normalizer
 from train.trainer import Trainer
-from models import MLP, Conv1D, LSTM, SpectralTransformer
+from models.model import MLP, Conv1D, LSTM, SpectralTransformer
 
 
 def parse_args():

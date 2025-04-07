@@ -13,7 +13,7 @@ import json
 plt.rcParams['font.sans-serif'] = ['SimHei', 'Arial Unicode MS', 'DejaVu Sans', 'sans-serif']
 plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
 
-from models import MLP, Conv1D, LSTM, SpectralTransformer
+from models.model import MLP, Conv1D, LSTM, SpectralTransformer
 from utils.general import load_config, get_device
 from utils.dataset import Normalizer
 

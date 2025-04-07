@@ -1,3 +1,6 @@
+import torch
+import torch.nn as nn
+
 class Autoencoder(nn.Module):
     def __init__(self, input_dim, hidden_dims, latent_dim, dropout_rate=0.2, batch_norm=False):
         super().__init__()

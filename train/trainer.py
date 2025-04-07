@@ -10,6 +10,7 @@ from pathlib import Path
 from torch.utils.tensorboard import SummaryWriter
 
 from utils.general import plot_loss_curve
+from models.loss import L1Loss
 
 
 class Trainer:
@@ -34,6 +35,10 @@ class Trainer:
         self.tb_log_dir = self.experiment_dir / 'logs'
         os.makedirs(self.tb_log_dir, exist_ok=True)
         self.writer = SummaryWriter(log_dir=self.tb_log_dir)
+        
+        # 创建模型信息目录
+        self.model_info_dir = self.experiment_dir / 'model_info'
+        os.makedirs(self.model_info_dir, exist_ok=True)
         
         # Get device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -61,6 +66,9 @@ class Trainer:
         self.train_losses = []
         self.val_losses = []
         
+        # 保存模型结构信息
+        self._save_model_info()
+        
         # 如果配置中指定了预训练权重，加载它们
         pretrained_path = config.get('pretrained', None)
         if pretrained_path:
@@ -76,7 +84,7 @@ class Trainer:
         if loss_name.lower() == 'mse':
             return nn.MSELoss()
         elif loss_name.lower() == 'mae':
-            return nn.L1Loss()
+            return L1Loss()
         elif loss_name.lower() == 'bce':
             return nn.BCEWithLogitsLoss()
         elif loss_name.lower() == 'ce':
@@ -473,3 +481,74 @@ class Trainer:
         self.evaluate_best_model()
         
         return best_val_loss 
+
+    def _save_model_info(self):
+        """保存模型结构信息到文本文件"""
+        info_path = self.model_info_dir / 'model_structure.txt'
+        
+        with open(info_path, 'w', encoding='utf-8') as f:
+            # 写入模型名称和时间
+            f.write(f"模型结构信息\n")
+            f.write(f"{'='*50}\n")
+            f.write(f"生成时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            
+            # 写入模型类型
+            model_type = self.model.__class__.__name__
+            f.write(f"模型类型: {model_type}\n\n")
+            
+            # 写入模型配置
+            if 'model_config' in self.config:
+                f.write("模型配置:\n")
+                for key, value in self.config['model_config'].items():
+                    f.write(f"  {key}: {value}\n")
+                f.write("\n")
+            
+            # 写入模型参数统计
+            total_params = sum(p.numel() for p in self.model.parameters())
+            trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+            f.write(f"参数统计:\n")
+            f.write(f"  总参数数量: {total_params:,}\n")
+            f.write(f"  可训练参数: {trainable_params:,}\n")
+            f.write(f"  不可训练参数: {total_params - trainable_params:,}\n\n")
+            
+            # 写入模型结构
+            f.write("模型结构:\n")
+            f.write(f"{self.model}\n\n")
+            
+            # 写入每层参数数量
+            f.write("每层参数数量:\n")
+            for name, param in self.model.named_parameters():
+                f.write(f"  {name}: {param.numel():,} 参数\n")
+            
+            # 写入优化器信息
+            f.write("\n优化器信息:\n")
+            f.write(f"  类型: {self.optimizer.__class__.__name__}\n")
+            f.write(f"  学习率: {self.config.get('learning_rate', 0.001)}\n")
+            f.write(f"  权重衰减: {self.config.get('weight_decay', 0)}\n")
+            
+            # 写入损失函数信息
+            f.write("\n损失函数:\n")
+            f.write(f"  类型: {self.criterion.__class__.__name__}\n")
+            
+            # 写入学习率调度器信息
+            if self.scheduler:
+                f.write("\n学习率调度器:\n")
+                f.write(f"  类型: {self.scheduler.__class__.__name__}\n")
+                if 'scheduler_params' in self.config:
+                    for key, value in self.config.get('scheduler_params', {}).items():
+                        f.write(f"  {key}: {value}\n")
+            
+            # 写入训练配置
+            f.write("\n训练配置:\n")
+            f.write(f"  批次大小: {self.config.get('batch_size', 'N/A')}\n")
+            f.write(f"  Epochs: {self.config.get('epochs', 'N/A')}\n")
+            early_stopping = self.config.get('early_stopping', 'N/A')
+            if early_stopping == -1:
+                early_stopping = "禁用"
+            f.write(f"  早停机制: {early_stopping}\n")
+            
+            # 写入设备信息
+            f.write("\n训练设备:\n")
+            f.write(f"  {self.device}\n")
+        
+        print(f"模型结构信息已保存到: {info_path}") 
