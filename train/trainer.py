@@ -41,7 +41,16 @@ class Trainer:
         os.makedirs(self.model_info_dir, exist_ok=True)
         
         # Get device
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        device_id = config.get('device', -1)  # 默认使用-1（CPU）
+        if device_id >= 0 and torch.cuda.is_available():
+            if device_id >= torch.cuda.device_count():
+                print(f"Warning: Specified GPU {device_id} not available. Using GPU 0 instead.")
+                device_id = 0
+            self.device = torch.device(f'cuda:{device_id}')
+            torch.cuda.set_device(device_id)  # 设置当前使用的GPU
+        else:
+            self.device = torch.device('cpu')
+        
         self.model = self.model.to(self.device)
         
         # Loss function
@@ -65,6 +74,7 @@ class Trainer:
         self.best_val_loss = float('inf')
         self.train_losses = []
         self.val_losses = []
+        self.learning_rates = []  # 添加学习率历史记录
         
         # 保存模型结构信息
         self._save_model_info()
@@ -301,6 +311,7 @@ class Trainer:
         
         # 记录当前学习率
         current_lr = self.optimizer.param_groups[0]['lr']
+        self.learning_rates.append(current_lr)  # 记录学习率
         self.writer.add_scalar('Training/LearningRate', current_lr, epoch)
         
         for batch_idx, (data, target) in enumerate(pbar):
@@ -344,8 +355,8 @@ class Trainer:
             # 更新进度条
             pbar.set_postfix({
                 'loss': f'{loss.item():.3f}',
-                'lr': f'{current_lr:.2e}',
-                'grad_norm': f'{total_norm:.2f}'
+                #'lr': f'{current_lr:.2e}',
+                #'grad_norm': f'{total_norm:.2f}'
             })
         
         # 合并所有批次的输出，计算预测值统计信息
@@ -443,6 +454,7 @@ class Trainer:
         for epoch in pbar:
             # 记录当前学习率
             current_lr = self.optimizer.param_groups[0]['lr']
+            self.learning_rates.append(current_lr)  # 记录学习率
             self.writer.add_scalar('Training/LearningRate', current_lr, epoch)
             
             # 训练一个epoch
@@ -474,7 +486,6 @@ class Trainer:
                 new_lr = self.optimizer.param_groups[0]['lr']
                 if new_lr != current_lr:
                     self.writer.add_scalar('Training/LearningRate', new_lr, epoch + 0.5)
-                    print(f"\nLearning rate changed from {current_lr:.2e} to {new_lr:.2e}")
             
             # 记录损失
             self.train_losses.append(train_loss)
@@ -490,10 +501,11 @@ class Trainer:
             print(f"Validation Loss: {val_loss:.4f}")
             print(f"Learning Rate: {current_lr:.6f}")
             
-            # 绘制损失曲线
+            # 绘制损失曲线和学习率曲线
             plot_loss_curve(
                 self.train_losses, 
-                self.val_losses, 
+                self.val_losses,
+                self.learning_rates,  # 传入学习率数据
                 save_path=str(self.experiment_dir / 'plots' / 'loss_curve.png')
             )
 
@@ -530,6 +542,19 @@ class Trainer:
             f.write(f"模型结构信息\n")
             f.write(f"{'='*50}\n")
             f.write(f"生成时间: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            
+            # 写入GPU信息
+            f.write("GPU信息:\n")
+            if torch.cuda.is_available():
+                gpu_count = torch.cuda.device_count()
+                for i in range(gpu_count):
+                    gpu_name = torch.cuda.get_device_name(i)
+                    gpu_memory = torch.cuda.get_device_properties(i).total_memory / 1024**3  # 转换为GB
+                    f.write(f"  GPU {i}: {gpu_name} (内存: {gpu_memory:.1f}GB)\n")
+                f.write(f"当前使用的GPU: {torch.cuda.current_device()}\n")
+            else:
+                f.write("  未检测到可用的GPU，将使用CPU进行训练\n")
+            f.write("\n")
             
             # 写入模型类型
             model_type = self.model.__class__.__name__

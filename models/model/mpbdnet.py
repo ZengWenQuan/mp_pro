@@ -9,12 +9,13 @@ class MPBDBlock(nn.Module):
     Args:
         input_channel: Size of input channels
         output_channel: Size of output channels
+        batch_norm: Whether to use batch normalization
     """
-    def __init__(self, input_channel=1, output_channel=4):
+    def __init__(self, input_channel=1, output_channel=4, batch_norm=False):
         super(MPBDBlock, self).__init__()
         
         # First branch with smaller kernel sizes
-        self.Block1 = nn.Sequential(
+        block1_layers = [
             nn.Conv1d(
                 in_channels=input_channel,
                 out_channels=output_channel,
@@ -23,7 +24,12 @@ class MPBDBlock(nn.Module):
                 padding=1,
                 bias=True,
             ),
-            nn.ReLU(),
+        ]
+        if batch_norm:
+            block1_layers.append(nn.BatchNorm1d(output_channel))
+        block1_layers.append(nn.ReLU())
+        
+        block1_layers.append(
             nn.Conv1d(
                 in_channels=output_channel,
                 out_channels=output_channel,
@@ -31,12 +37,16 @@ class MPBDBlock(nn.Module):
                 stride=1,
                 padding=1,
                 bias=True,
-            ),
-            nn.ReLU(),
+            )
         )
+        if batch_norm:
+            block1_layers.append(nn.BatchNorm1d(output_channel))
+        block1_layers.append(nn.ReLU())
+        
+        self.Block1 = nn.Sequential(*block1_layers)
         
         # Second branch with larger kernel sizes
-        self.Block2 = nn.Sequential(
+        block2_layers = [
             nn.Conv1d(
                 in_channels=input_channel,
                 out_channels=output_channel,
@@ -45,7 +55,12 @@ class MPBDBlock(nn.Module):
                 padding=2,
                 bias=True,
             ),
-            nn.ReLU(),
+        ]
+        if batch_norm:
+            block2_layers.append(nn.BatchNorm1d(output_channel))
+        block2_layers.append(nn.ReLU())
+        
+        block2_layers.append(
             nn.Conv1d(
                 in_channels=output_channel,
                 out_channels=output_channel,
@@ -53,14 +68,18 @@ class MPBDBlock(nn.Module):
                 stride=1,
                 padding=3,
                 bias=True,
-            ),
-            nn.ReLU(),
+            )
         )
+        if batch_norm:
+            block2_layers.append(nn.BatchNorm1d(output_channel))
+        block2_layers.append(nn.ReLU())
+        
+        self.Block2 = nn.Sequential(*block2_layers)
         
         # Downsample path if input and output channels differ
         self.downsample = nn.Sequential()
         if input_channel != output_channel:
-            self.downsample = nn.Sequential(
+            downsample_layers = [
                 nn.Conv1d(
                     in_channels=input_channel,
                     out_channels=output_channel,
@@ -69,7 +88,10 @@ class MPBDBlock(nn.Module):
                     padding=0,
                     bias=True,
                 ),
-            )
+            ]
+            if batch_norm:
+                downsample_layers.append(nn.BatchNorm1d(output_channel))
+            self.downsample = nn.Sequential(*downsample_layers)
     
     def forward(self, x):
         # Combine outputs from both branches and downsample path
@@ -86,10 +108,11 @@ class Embedding(nn.Module):
         kernel_size: Kernel size for convolution
         overlap: Overlap between consecutive windows
         padding: Padding size
+        batch_norm: Whether to use batch normalization
     """
-    def __init__(self, input_channel=1, embedding_c=50, kernel_size=3, overlap=1, padding=1):
+    def __init__(self, input_channel=1, embedding_c=50, kernel_size=3, overlap=1, padding=1, batch_norm=False):
         super(Embedding, self).__init__()
-        self.embedding = nn.Sequential(
+        embedding_layers = [
             nn.Conv1d(
                 in_channels=input_channel,
                 out_channels=embedding_c,
@@ -98,8 +121,12 @@ class Embedding(nn.Module):
                 padding=padding,
                 bias=True,
             ),
-            nn.ReLU(),
-        )
+        ]
+        if batch_norm:
+            embedding_layers.append(nn.BatchNorm1d(embedding_c))
+        embedding_layers.append(nn.ReLU())
+        
+        self.embedding = nn.Sequential(*embedding_layers)
     
     def forward(self, x):
         x = self.embedding(x)
@@ -117,6 +144,7 @@ class MPBDNet(nn.Module):
         embedding_c: Embedding dimension
         seq_len: Input sequence length
         dropout_rate: Dropout probability
+        batch_norm: Whether to use batch normalization
     """
     def __init__(self, 
                  num_classes=3, 
@@ -124,7 +152,8 @@ class MPBDNet(nn.Module):
                  num_rnn_sequence=18, 
                  embedding_c=50, 
                  seq_len=64,
-                 dropout_rate=0.3):
+                 dropout_rate=0.3,
+                 batch_norm=False):
         super(MPBDNet, self).__init__()
         
         # Validate and store parameters
@@ -135,15 +164,16 @@ class MPBDNet(nn.Module):
         self.list_inplanes = list_inplanes.copy()
         self.list_inplanes.insert(0, 1)  # Add input channel as first element
         self.embedding_c = embedding_c
+        self.batch_norm = batch_norm
         
         # Create MPBD blocks
         self.MPBDBlock_list = []
         for i in range(len(self.list_inplanes)-1):
             self.MPBDBlock_list.append(
                 nn.Sequential(
-                    MPBDBlock(self.list_inplanes[i], self.list_inplanes[i+1]),
-                    MPBDBlock(self.list_inplanes[i+1], self.list_inplanes[i+1]),
-                    MPBDBlock(self.list_inplanes[i+1], self.list_inplanes[i+1]),
+                    MPBDBlock(self.list_inplanes[i], self.list_inplanes[i+1], batch_norm=batch_norm),
+                    MPBDBlock(self.list_inplanes[i+1], self.list_inplanes[i+1], batch_norm=batch_norm),
+                    MPBDBlock(self.list_inplanes[i+1], self.list_inplanes[i+1], batch_norm=batch_norm),
                     nn.AvgPool1d(3),
                 )
             )
@@ -162,6 +192,7 @@ class MPBDNet(nn.Module):
             kernel_size=3,
             overlap=1,
             padding=1,
+            batch_norm=batch_norm,
         )
         
         # Calculate sequence length after embedding
@@ -186,23 +217,29 @@ class MPBDNet(nn.Module):
         fc1_input_features = seq_after_embedding * embedding_c
         
         # Fully connected layers
-        self.fc1 = nn.Sequential(
+        fc1_layers = [
             nn.Linear(
                 in_features=fc1_input_features,
                 out_features=256,
             ),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_rate),
-        )
+        ]
+        if batch_norm:
+            fc1_layers.append(nn.BatchNorm1d(256))
+        fc1_layers.append(nn.ReLU())
+        fc1_layers.append(nn.Dropout(p=dropout_rate))
+        self.fc1 = nn.Sequential(*fc1_layers)
         
-        self.fc2 = nn.Sequential(
+        fc2_layers = [
             nn.Linear(
                 in_features=256,
                 out_features=128,
             ),
-            nn.ReLU(),
-            nn.Dropout(p=dropout_rate),
-        )
+        ]
+        if batch_norm:
+            fc2_layers.append(nn.BatchNorm1d(128))
+        fc2_layers.append(nn.ReLU())
+        fc2_layers.append(nn.Dropout(p=dropout_rate))
+        self.fc2 = nn.Sequential(*fc2_layers)
         
         self.output = nn.Linear(
             in_features=128,

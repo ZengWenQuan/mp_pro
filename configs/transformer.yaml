@@ -32,6 +32,7 @@ data:
 
 # Training Configuration
 training:
+  device: 2  # Options: -1：cpu, 0,1,2,3：cuda
   batch_size: 32
   epochs: 100
   learning_rate: 0.0005  # Transformer通常使用较小的学习率

@@ -190,6 +190,25 @@ def main():
     exp_dir = create_exp_dir(exp_name)
     print(f"Experiment directory: {exp_dir}")
     
+    # 输出GPU信息
+    if torch.cuda.is_available():
+        gpu_count = torch.cuda.device_count()
+        print(f"\nGPU信息:")
+        for i in range(gpu_count):
+            gpu_name = torch.cuda.get_device_name(i)
+            gpu_memory = torch.cuda.get_device_properties(i).total_memory / 1024**3  # 转换为GB
+            print(f"  GPU {i}: {gpu_name} (内存: {gpu_memory:.1f}GB)")
+        
+        # 获取当前使用的GPU
+        device_id = config['training'].get('device', -1)
+        if device_id >= 0 and device_id < gpu_count:
+            current_gpu = device_id
+        else:
+            current_gpu = torch.cuda.current_device()
+        print(f"当前使用的GPU: {current_gpu} ({torch.cuda.get_device_name(current_gpu)})")
+    else:
+        print("\n未检测到可用的GPU，将使用CPU进行训练")
+    
     # Update config with command line arguments
     if args.resume_from:
         config['resume_from'] = args.resume_from

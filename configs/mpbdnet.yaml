@@ -8,6 +8,7 @@ model:
   embedding_c: 50  # Embedding dimension
   seq_len: 64  # Input sequence length
   dropout_rate: 0.3  # Dropout probability
+  batch_norm: true  # Whether to use batch normalization
 
 # Data Configuration
 data:
@@ -28,9 +29,27 @@ data:
     - feh   # Metallicity
     - teff  # Effective temperature
   use_all_features: true  # Use all features in the feature file
+  pin_memory: true
 
 # Training Configuration
 training:
+  device: 2  # Options: -1：cpu, 0,1,2,3：cuda
+  batch_size: 32
+  epochs: 500
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  loss: mse  # Options: mse, mae, bce, ce
+  optimizer: adam  # Options: adam, sgd, rmsprop
+  scheduler: cosine  # Options: step, cosine, plateau, None
+  early_stopping: -1  # -1 means no early stopping, positive integer means patience value
+  scheduler_params:
+    t_max: 50  # For cosine scheduler
+  warmup_epochs: 5
+  early_stopping_patience: 10
+
+# Training Configuration
+training:
+  device: 2  # Options: -1：cpu, 0,1,2,3：cuda
   batch_size: 32
   epochs: 500
   learning_rate: 0.001

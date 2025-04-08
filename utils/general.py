@@ -35,8 +35,9 @@ def save_config(config, save_path):
         yaml.dump(config, f)
 
 
-def plot_loss_curve(train_losses, val_losses, save_path=None):
-    """Plot training and validation loss curves"""
+def plot_loss_curve(train_losses, val_losses, learning_rates=None, save_path=None):
+    """Plot training and validation loss curves, and learning rate curve if provided"""
+    # 绘制损失曲线
     plt.figure(figsize=(10, 6))
     plt.plot(train_losses, label='Train Loss')
     plt.plot(val_losses, label='Validation Loss')
@@ -47,9 +48,28 @@ def plot_loss_curve(train_losses, val_losses, save_path=None):
     plt.grid(True)
     
     if save_path:
-        plt.savefig(save_path)
-    
+        # 保存损失曲线图
+        loss_save_path = save_path.replace('.png', '_loss.png')
+        plt.savefig(loss_save_path)
     plt.close()
+    
+    # 如果提供了学习率数据，绘制学习率曲线
+    if learning_rates is not None:
+        plt.figure(figsize=(10, 6))
+        plt.plot(learning_rates, label='Learning Rate', color='green')
+        plt.xlabel('Epoch')
+        plt.ylabel('Learning Rate')
+        plt.title('Learning Rate Schedule')
+        plt.legend()
+        plt.grid(True)
+        # 使用对数刻度显示学习率
+        plt.yscale('log')
+        
+        if save_path:
+            # 保存学习率曲线图
+            lr_save_path = save_path.replace('.png', '_lr.png')
+            plt.savefig(lr_save_path)
+        plt.close()
 
 
 def create_exp_dir(exp_name, parent_dir='runs'):
