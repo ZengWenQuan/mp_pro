@@ -149,6 +149,12 @@ class MPBDNet(nn.Module):
             )
         self.MPBDBlock_list = nn.Sequential(*self.MPBDBlock_list)
         
+        # Calculate sequence length after MPBD blocks
+        # Each block has AvgPool1d with kernel_size=3, so divide by 3 for each block
+        seq_after_blocks = seq_len
+        for _ in range(len(self.list_inplanes)-1):
+            seq_after_blocks = seq_after_blocks // 3
+        
         # Embedding layer
         self.embedding = Embedding(
             input_channel=self.list_inplanes[-1],
@@ -157,6 +163,10 @@ class MPBDNet(nn.Module):
             overlap=1,
             padding=1,
         )
+        
+        # Calculate sequence length after embedding
+        # Embedding uses stride=2, so divide by 2
+        seq_after_embedding = seq_after_blocks // 2
         
         # Bidirectional LSTM layers
         self.rnn = nn.LSTM(
@@ -172,10 +182,13 @@ class MPBDNet(nn.Module):
             batch_first=True,
         )
         
+        # Calculate input features for first fully connected layer
+        fc1_input_features = seq_after_embedding * embedding_c
+        
         # Fully connected layers
         self.fc1 = nn.Sequential(
             nn.Linear(
-                in_features=1500,
+                in_features=fc1_input_features,
                 out_features=256,
             ),
             nn.ReLU(),
@@ -221,9 +234,9 @@ class MPBDNet(nn.Module):
             x = x.unsqueeze(1)  # [batch_size, 1, seq_len]
         
         # Pad if necessary to make length divisible by 8
-        if x.size(1) % 8 != 0:
-            padding_size = 8 - (x.size(1) % 8)
-            x = torch.cat([x, torch.zeros([x.size(0), padding_size]).to(x.device)], dim=1)
+        if x.size(2) % 8 != 0:
+            padding_size = 8 - (x.size(2) % 8)
+            x = torch.cat([x, torch.zeros([x.size(0), x.size(1), padding_size]).to(x.device)], dim=2)
         
         # Process through MPBD blocks
         x = self.MPBDBlock_list(x)

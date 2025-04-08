@@ -13,7 +13,8 @@ model:
 data:
   train_dir: data/train  # Training data directory
   test_dir: data/test   # Test data directory
-  features_file: features.csv  # Feature file name
+  #features_file: features.csv  # Feature file name
+  features_file: features_filtered_501features.csv  # Feature file name
   labels_file: labels.csv     # Label file name
   data_size: 1000
   seq_len: 64
@@ -31,7 +32,7 @@ data:
 # Training Configuration
 training:
   batch_size: 32
-  epochs: 50
+  epochs: 500
   learning_rate: 0.001
   weight_decay: 0.0001
   loss: mse  # Options: mse, mae, bce, ce

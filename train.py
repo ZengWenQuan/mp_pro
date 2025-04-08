@@ -13,7 +13,7 @@ from tqdm import tqdm
 from utils.general import seed_everything, load_config, create_exp_dir, get_device
 from utils.dataset import create_dataloaders, Normalizer
 from train.trainer import Trainer
-from models.model import MLP, Conv1D, LSTM, SpectralTransformer
+from models.model import MLP, Conv1D, LSTM, SpectralTransformer, MPBDNet
 
 
 def parse_args():
@@ -82,6 +82,17 @@ def get_model(model_cfg):
             dim_feedforward=model_cfg.get('dim_feedforward', 512),
             dropout_rate=model_cfg.get('dropout_rate', 0.1),
             output_dim=output_dim
+        )
+    
+    elif model_name == 'mpbdnet':
+        # 对于MPBDNet模型，我们使用配置中的参数
+        model = MPBDNet(
+            num_classes=output_dim,
+            list_inplanes=model_cfg.get('list_inplanes', [3, 6, 18]),
+            num_rnn_sequence=model_cfg.get('num_rnn_sequence', 18),
+            embedding_c=model_cfg.get('embedding_c', 50),
+            seq_len=input_dim,
+            dropout_rate=model_cfg.get('dropout_rate', 0.3)
         )
     
     else:
@@ -297,6 +308,8 @@ def main():
         print(f"MLP输出层: {model.model[-1]}")
     elif isinstance(model, Conv1D):
         print(f"Conv1D输出层: {model.fc_layers[-1]}")
+    elif isinstance(model, MPBDNet):
+        print(f"MPBDNet输出层: {model.output}")
     
     # 将模型配置添加到训练配置中
     config['training']['model_config'] = config['model']

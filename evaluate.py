@@ -26,7 +26,7 @@ plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
 
 from utils.general import seed_everything, load_config, get_device
 from utils.dataset import Normalizer
-from models.model import MLP, Conv1D, LSTM, SpectralTransformer
+from models.model import MLP, Conv1D, LSTM, SpectralTransformer, MPBDNet
 
 
 def parse_args():
@@ -93,6 +93,17 @@ def get_model(model_cfg):
             dim_feedforward=model_cfg.get('dim_feedforward', 512),
             dropout_rate=model_cfg.get('dropout_rate', 0.1),
             output_dim=output_dim
+        )
+    
+    elif model_name == 'mpbdnet':
+        # 对于MPBDNet模型，我们使用配置中的参数
+        model = MPBDNet(
+            num_classes=output_dim,
+            list_inplanes=model_cfg.get('list_inplanes', [3, 6, 18]),
+            num_rnn_sequence=model_cfg.get('num_rnn_sequence', 18),
+            embedding_c=model_cfg.get('embedding_c', 50),
+            seq_len=input_dim,
+            dropout_rate=model_cfg.get('dropout_rate', 0.3)
         )
     
     else:

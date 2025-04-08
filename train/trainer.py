@@ -299,6 +299,10 @@ class Trainer:
         # 创建进度条
         pbar = tqdm(self.train_loader, desc=f'Epoch {epoch+1}/{self.config["epochs"]} [Train]', leave=True, position=0)
         
+        # 记录当前学习率
+        current_lr = self.optimizer.param_groups[0]['lr']
+        self.writer.add_scalar('Training/LearningRate', current_lr, epoch)
+        
         for batch_idx, (data, target) in enumerate(pbar):
             data, target = data.to(self.device), target.to(self.device)
             
@@ -309,6 +313,19 @@ class Trainer:
             
             # Backward pass
             loss.backward()
+            
+            # 计算梯度范数
+            total_norm = 0
+            for p in self.model.parameters():
+                if p.grad is not None:
+                    param_norm = p.grad.data.norm(2)
+                    total_norm += param_norm.item() ** 2
+            total_norm = total_norm ** 0.5
+            
+            # 梯度裁剪（如果配置中指定）
+            if self.config.get('gradient_clip'):
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config['gradient_clip'])
+            
             self.optimizer.step()
             
             # Update metrics
@@ -318,13 +335,18 @@ class Trainer:
             all_outputs.append(output.detach().cpu().numpy())
             all_targets.append(target.detach().cpu().numpy())
             
-            # 每隔一定步数记录训练损失到TensorBoard
+            # 每隔一定步数记录训练损失和梯度范数到TensorBoard
             if batch_idx % 10 == 0:
                 global_step = epoch * len(self.train_loader) + batch_idx
                 self.writer.add_scalar('Training/BatchLoss', loss.item(), global_step)
+                self.writer.add_scalar('Training/GradientNorm', total_norm, global_step)
             
             # 更新进度条
-            pbar.set_postfix({'loss': f'{loss.item():.3f}'})
+            pbar.set_postfix({
+                'loss': f'{loss.item():.3f}',
+                'lr': f'{current_lr:.2e}',
+                'grad_norm': f'{total_norm:.2f}'
+            })
         
         # 合并所有批次的输出，计算预测值统计信息
         all_outputs = np.concatenate(all_outputs)
@@ -419,6 +441,10 @@ class Trainer:
                     position=0)
         
         for epoch in pbar:
+            # 记录当前学习率
+            current_lr = self.optimizer.param_groups[0]['lr']
+            self.writer.add_scalar('Training/LearningRate', current_lr, epoch)
+            
             # 训练一个epoch
             train_loss, train_outputs, train_targets = self.train_epoch(epoch)
             
@@ -439,18 +465,30 @@ class Trainer:
             
             # 更新学习率
             if self.scheduler:
-                self.scheduler.step()
+                if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                    self.scheduler.step(val_loss)
+                else:
+                    self.scheduler.step()
+                    
+                # 记录更新后的学习率
+                new_lr = self.optimizer.param_groups[0]['lr']
+                if new_lr != current_lr:
+                    self.writer.add_scalar('Training/LearningRate', new_lr, epoch + 0.5)
+                    print(f"\nLearning rate changed from {current_lr:.2e} to {new_lr:.2e}")
             
             # 记录损失
             self.train_losses.append(train_loss)
             self.val_losses.append(val_loss)
-                        # 输出当前epoch的详细信息
+            
+            # 记录到TensorBoard
+            self.writer.add_scalar('Loss/Train', train_loss, epoch)
+            self.writer.add_scalar('Loss/Validation', val_loss, epoch)
+            
+            # 输出当前epoch的详细信息
             print(f"\nEpoch {epoch+1}/{self.config['epochs']} Summary:")
             print(f"Training Loss: {train_loss:.4f}")
             print(f"Validation Loss: {val_loss:.4f}")
-            if self.scheduler:
-                current_lr = self.optimizer.param_groups[0]['lr']
-                print(f"Learning Rate: {current_lr:.6f}")
+            print(f"Learning Rate: {current_lr:.6f}")
             
             # 绘制损失曲线
             plot_loss_curve(
@@ -463,7 +501,8 @@ class Trainer:
             pbar.set_postfix({
                 'train_loss': f'{train_loss:.4f}',
                 'val_loss': f'{val_loss:.4f}',
-                'best_val_loss': f'{best_val_loss:.4f}'
+                'best_val_loss': f'{best_val_loss:.4f}',
+                'lr': f'{current_lr:.2e}'
             })
             
             # 早停检查
@@ -480,7 +519,7 @@ class Trainer:
         # 训练结束后，自动评估最优模型
         self.evaluate_best_model()
         
-        return best_val_loss 
+        return best_val_loss
 
     def _save_model_info(self):
         """保存模型结构信息到文本文件"""
