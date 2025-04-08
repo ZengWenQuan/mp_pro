@@ -4,11 +4,17 @@
 1. 检查已安装的库，避免重复安装
 2. 只安装缺失或版本不符的库
 3. 自动检测GPU/CUDA可用性，选择合适的PyTorch版本
+4. 使用清华源加速下载
 """
 import subprocess
 import sys
 import importlib
 import pkg_resources
+
+# 配置pip源
+TSINGHUA_SOURCE = "https://pypi.tuna.tsinghua.edu.cn/simple"
+PYTORCH_SOURCE = "https://download.pytorch.org/whl/cu118"  # GPU版本
+PYTORCH_CPU_SOURCE = "https://download.pytorch.org/whl/cpu"  # CPU版本
 
 def is_gpu_available():
     """检查CUDA是否可用，通过运行nvidia-smi命令"""
@@ -113,7 +119,7 @@ def main():
         print("\n正在安装缺失的标准库:")
         for pkg in final_to_install:
             print(f"  → {pkg}")
-            subprocess.run([sys.executable, "-m", "pip", "install", pkg], check=True)
+            subprocess.run([sys.executable, "-m", "pip", "install", pkg, "-i", TSINGHUA_SOURCE], check=True)
     else:
         print("\n所有标准库已安装完成!")
     
@@ -126,7 +132,7 @@ def main():
         torch_cmd.extend(torch_to_install)
         
         if has_gpu:
-            torch_cmd.extend(["--extra-index-url", "https://download.pytorch.org/whl/cu118"])
+            torch_cmd.extend(["--extra-index-url", PYTORCH_SOURCE])
         else:
             # 为不带cpu后缀的torch包添加+cpu
             for i, req in enumerate(torch_cmd):
@@ -141,7 +147,7 @@ def main():
                     else:
                         torch_cmd[i] = f"{req}+cpu"
             
-            torch_cmd.extend(["--extra-index-url", "https://download.pytorch.org/whl/cpu"])
+            torch_cmd.extend(["--extra-index-url", PYTORCH_CPU_SOURCE])
         
         # 执行PyTorch安装
         for pkg in torch_cmd[2:]:
