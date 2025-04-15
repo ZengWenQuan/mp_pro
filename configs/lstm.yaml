@@ -31,9 +31,9 @@ data:
 
 # Training Configuration
 training:
-  device: 2  # Options: -1：cpu, 0,1,2,3：cuda
+  device: 0  # Options: -1：cpu, 0,1,2,3：cuda
   batch_size: 32
-  epochs: 200
+  epochs: 500
   learning_rate: 0.001
   weight_decay: 0.0001
   loss: mse  # Options: mse, mae, bce, ce

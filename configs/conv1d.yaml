@@ -2,24 +2,24 @@
 model:
   name: conv1d
   input_channels: 1  # 固定为1，输入数据会在模型中重新调整形状
-  hidden_dims: [128, 256, 128]  # 全连接层的维度
-  output_dim: 3  # 预测三个特征：logg, feh, teff
-  dropout_rate: 0.2
-  # Conv1D特有参数
-  channels: [32, 64, 128, 256, 512]  # 卷积层通道数，增加到5层
-  kernel_sizes: [3, 3, 3, 3, 3]  # 卷积核大小，增加到5层
-  fc_dims: [512, 256]  # 全连接层维度，增加最大维度以适应更多的特征
-  batch_norm: true  # 添加BatchNorm配置
+  seq_len: 1801  # 序列长度，应与特征数量一致
+  output_dim: 3  # 预测三个特征：logg, feh, teff（在Conv1D中对应num_classes）
+  dropout_rate: 0.2  # 适度的dropout防止过拟合
+  # Conv1D特有参数 - 减少通道数以降低参数量
+  channels: [16, 32, 64, 128]  # 减少通道数
+  kernel_sizes: [5, 5, 3, 3]  # 减小卷积核尺寸
+  fc_dims: [128, 64]  # 适度的全连接层维度
+  batch_norm: true  # 保留BatchNorm
 
 # Data Configuration
 data:
-  train_dir: data/train  # 训练数据目录
-  test_dir: data/test   # 测试数据目录
-  # features_file: features_filtered_501features.csv  # 特征文件名
-  features_file: features.csv  # 特征文件名
+  train_dir: data_new/train  # 训练数据目录
+  test_dir: data_new/test   # 测试数据目录
+  features_file: features_filtered_501features.csv  # 特征文件名
+  #features_file: features.csv  # 特征文件名
   labels_file: labels.csv     # 标签文件名
   data_size: 1000
-  seq_len: 64
+  seq_len: 1801  # 确保与模型的seq_len一致，对应特征维度
   feature_dim: 1  # 对于Conv1D，这个值会被忽略，因为所有特征都作为序列处理
   val_split: 0.2
   test_split: 0.1
@@ -33,14 +33,14 @@ data:
 
 # Training Configuration
 training:
-  device: 2  # Options: -1：cpu, 0,1,2,3：cuda
-  batch_size: 32
-  epochs: 50
+  device: 0  # Options: -1：cpu, 0,1,2,3：cuda
+  batch_size: 128
+  epochs: 200  # 适度的训练轮数
   learning_rate: 0.001
-  weight_decay: 0.0001
+  weight_decay: 0.0001  # 适度的权重衰减
   loss: mse  # Options: mse, mae, bce, ce
   optimizer: adam  # Options: adam, sgd, rmsprop
   scheduler: cosine  # Options: step, cosine, plateau, None
-  early_stopping: -1  # -1 表示不启用早停机制，正整数表示早停的耐心值
+  early_stopping: 10  # 启用早停机制
   scheduler_params:
     t_max: 50  # For cosine scheduler 

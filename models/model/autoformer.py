@@ -349,8 +349,7 @@ class Autoformer(nn.Module):
                 nhead=n_heads,
                 dim_feedforward=d_ff,
                 dropout=dropout,
-                activation=activation,
-                batch_first=True
+                activation=activation
             ) for _ in range(e_layers)
         ])
         
@@ -372,9 +371,15 @@ class Autoformer(nn.Module):
         # 处理为序列格式 (添加序列维度)
         x = x.unsqueeze(1)  # [batch_size, 1, d_model]
         
+        # 转置为[seq_len, batch_size, d_model]格式以适应非batch_first的编码器
+        x = x.transpose(0, 1)
+        
         # 通过编码器层
         for layer in self.encoder_layers:
             x = layer(x)
+        
+        # 转置回[batch_size, seq_len, d_model]
+        x = x.transpose(0, 1)
         
         # 取最后一个时间步的输出
         x = x.squeeze(1)  # [batch_size, d_model]

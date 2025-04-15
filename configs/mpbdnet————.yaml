@@ -1,0 +1,48 @@
+# Model Configuration
+model:
+  name: mpbdnet
+  input_channels: 1  # Fixed to 1, input data will be reshaped in the model
+  num_classes: 3  # Number of output features: logg, feh, teff
+  list_inplanes: [3, 6, 18]  # Channel sizes for each block
+  num_rnn_sequence: 18  # Number of RNN sequence steps
+  embedding_c: 50  # Embedding dimension
+  seq_len: 64  # Input sequence length
+  dropout_rate: 0.3  # Dropout probability
+  batch_norm: true  # Whether to use batch normalization
+
+# Data Configuration
+data:
+  train_dir: data_new/train  # Training data directory
+  test_dir: data_new/test   # Test data directory
+  features_file: features.csv  # Feature file name
+  #features_file: features_filtered_501features.csv  # Feature file name
+  labels_file: labels.csv     # Label file name
+  data_size: 1000
+  seq_len: 64
+  feature_dim: 1  # For MPBDNet, this value is ignored as all features are treated as a sequence
+  val_split: 0.2
+  test_split: 0.1
+  num_workers: 4
+  id_column: obsid  # ID column for linking features and labels
+  labels:
+    - logg  # Surface gravity
+    - feh   # Metallicity
+    - teff  # Effective temperature
+  use_all_features: true  # Use all features in the feature file
+  pin_memory: true
+
+# Training Configuration
+training:
+  device: 0  # Options: -1：cpu, 0,1,2,3：cuda
+  batch_size: 32
+  epochs: 500
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  loss: mse  # Options: mse, mae, bce, ce
+  optimizer: adam  # Options: adam, sgd, rmsprop
+  scheduler: cosine  # Options: step, cosine, plateau, None
+  early_stopping: -1  # -1 means no early stopping, positive integer means patience value
+  scheduler_params:
+    t_max: 50  # For cosine scheduler
+  warmup_epochs: 5
+  early_stopping_patience: 10

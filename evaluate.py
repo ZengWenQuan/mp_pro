@@ -102,11 +102,13 @@ def get_model(model_cfg):
     elif model_name == 'mpbdnet':
         from models.model.mpbdnet import MPBDNet
         model = MPBDNet(
-            input_dim=model_cfg.get('input_dim', 1),
-            hidden_dim=model_cfg.get('hidden_dim', 64),
-            output_dim=model_cfg.get('output_dim', 3),
-            num_layers=model_cfg.get('num_layers', 3),
-            dropout_rate=model_cfg.get('dropout_rate', 0.1)
+            num_classes=model_cfg.get('num_classes', 3),
+            list_inplanes=model_cfg.get('list_inplanes', [3, 6, 18]),
+            num_rnn_sequence=model_cfg.get('num_rnn_sequence', 18),
+            embedding_c=model_cfg.get('embedding_c', 50),
+            seq_len=model_cfg.get('seq_len', 64),
+            dropout_rate=model_cfg.get('dropout_rate', 0.3),
+            batch_norm=model_cfg.get('batch_norm', False)
         )
     
     elif model_name == 'autoencoder':

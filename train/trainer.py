@@ -314,14 +314,15 @@ class Trainer:
         print(f"评估完成，结果保存在: {output_dir}")
     
     def train_epoch(self, epoch):
-        """Train for one epoch"""
+        """训练一个epoch"""
         self.model.train()
         total_loss = 0
+        
         all_outputs = []
         all_targets = []
         
         # 创建进度条
-        pbar = tqdm(self.train_loader, desc=f'Epoch {epoch+1}/{self.config["epochs"]} [Train]', leave=True, position=0)
+        pbar = tqdm(self.train_loader, desc=f'Epoch {epoch+1}/{self.config["epochs"]} [Train]', leave=True, position=1)
         
         # 记录当前学习率
         current_lr = self.optimizer.param_groups[0]['lr']
@@ -329,6 +330,13 @@ class Trainer:
         self.writer.add_scalar('Training/LearningRate', current_lr, epoch)
         
         for batch_idx, (data, target) in enumerate(pbar):
+            # 检查批次大小，如果只有1个样本，跳过这个批次或者使用特殊处理
+            batch_size = data.size(0)
+            if batch_size < 2 and batch_idx < len(self.train_loader) - 1:
+                # 如果不是最后一个批次且样本数小于2，跳过
+                print(f"警告: 跳过批次 {batch_idx}，批次大小 ({batch_size}) 过小，不适合BatchNorm")
+                continue
+                
             data, target = data.to(self.device), target.to(self.device)
             
             # Forward pass
@@ -409,6 +417,13 @@ class Trainer:
             pbar = tqdm(self.val_loader, desc=f'Epoch {epoch+1}/{self.config["epochs"]} [Valid]', leave=True, position=1)
             
             for batch_idx, (data, target) in enumerate(pbar):
+                # 检查批次大小，如果只有1个样本，确保模型可以处理
+                batch_size = data.size(0)
+                if batch_size < 2 and batch_idx < len(self.val_loader) - 1:
+                    # 如果不是最后一个批次且样本数小于2，跳过
+                    print(f"警告: 跳过批次 {batch_idx}，批次大小 ({batch_size}) 过小，不适合BatchNorm")
+                    continue
+                    
                 data, target = data.to(self.device), target.to(self.device)
                 
                 # Forward pass

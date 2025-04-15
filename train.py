@@ -38,11 +38,13 @@ def get_model(model_cfg):
     if model_name == 'mpbdnet':
         from models.model.mpbdnet import MPBDNet
         model = MPBDNet(
-            input_dim=model_cfg.get('input_dim', 1),
-            hidden_dim=model_cfg.get('hidden_dim', 64),
-            output_dim=model_cfg.get('output_dim', 3),
-            num_layers=model_cfg.get('num_layers', 3),
-            dropout_rate=model_cfg.get('dropout_rate', 0.1)
+            num_classes=model_cfg.get('num_classes', 3),
+            list_inplanes=model_cfg.get('list_inplanes', [3, 6, 18]),
+            num_rnn_sequence=model_cfg.get('num_rnn_sequence', 18),
+            embedding_c=model_cfg.get('embedding_c', 50),
+            seq_len=model_cfg.get('seq_len', 64),
+            dropout_rate=model_cfg.get('dropout_rate', 0.3),
+            batch_norm=model_cfg.get('batch_norm', False)
         )
     elif model_name == 'mlp':
         from models.model.mlp import MLP
@@ -56,12 +58,13 @@ def get_model(model_cfg):
     elif model_name == 'conv1d':
         from models.model.conv1d import Conv1D
         model = Conv1D(
-            input_dim=model_cfg.get('input_dim', 1), 
-            hidden_dim=model_cfg.get('hidden_dim', 64), 
-            kernel_size=model_cfg.get('kernel_size', 3), 
-            num_layers=model_cfg.get('num_layers', 3), 
-            output_dim=model_cfg.get('output_dim', 3), 
-            dropout_rate=model_cfg.get('dropout_rate', 0.1), 
+            input_channels=model_cfg.get('input_channels', 1), 
+            seq_len=model_cfg.get('seq_len', 64),
+            num_classes=model_cfg.get('output_dim', 3), 
+            channels=model_cfg.get('channels', [32, 64, 128]),
+            kernel_sizes=model_cfg.get('kernel_sizes', [3, 3, 3]),
+            fc_dims=model_cfg.get('fc_dims', [256, 128]),
+            dropout_rate=model_cfg.get('dropout_rate', 0.2), 
             batch_norm=model_cfg.get('batch_norm', False)
         )
     elif model_name == 'lstm':
@@ -320,7 +323,14 @@ def main():
     print(f"已保存标签归一化示例到: {norm_dir / 'label_normalization_example.csv'}")
     
     # 更新模型配置中的输入维度
-    config['model']['input_dim'] = X_train.shape[1]
+    feature_dim = X_train.shape[1]
+    if config['model']['name'] == 'conv1d':
+        # 对于Conv1D，使用seq_len参数表示特征维度
+        config['model']['seq_len'] = feature_dim
+        print(f"已设置Conv1D模型的序列长度为特征维度: {feature_dim}")
+    else:
+        config['model']['input_dim'] = feature_dim
+    
     config['model']['output_dim'] = y_train.shape[1]
     
     # Create data loaders - 使用归一化后的数据

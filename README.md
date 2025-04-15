@@ -11,6 +11,9 @@
   - LSTM (长短期记忆网络)
   - Transformer (变换器模型)
   - Autoencoder (自编码器)
+  - MPBDNet (多路径双分支网络)
+  - Autoformer (自相关变换器)
+  - Informer (信息增强变换器)
 - 完整的训练和评估流程：
 
   - 支持断点恢复训练（使用 --resume_from）
@@ -37,7 +40,10 @@ pip install -r requirements.txt
 │   ├── mlp_config.yaml    # MLP模型配置
 │   ├── lstm_config.yaml   # LSTM模型配置
 │   ├── conv1d_config.yaml # Conv1D模型配置
-│   └── transformer_config.yaml # Transformer模型配置
+│   ├── transformer_config.yaml # Transformer模型配置
+│   ├── mpbdnet.yaml   # MPBDNet模型配置
+│   ├── autoformer.yaml # Autoformer模型配置
+│   └── informer.yaml  # Informer模型配置
 ├── models/            # 模型定义
 ├── utils/             # 工具函数
 ├── train/             # 训练相关脚本
@@ -209,6 +215,9 @@ python run_train.py --config configs/mlp.yaml
 python run_train.py --config configs/lstm.yaml
 python run_train.py --config configs/conv1d.yaml
 python run_train.py --config configs/transformer.yaml
+python run_train.py --config configs/mpbdnet.yaml
+python run_train.py --config configs/autoformer.yaml
+python run_train.py --config configs/informer.yaml
 ```
 
 指定实验名称:
@@ -272,6 +281,97 @@ python detect.py --weights runs/模型名称_时间戳/weights/best.pt --input d
 - **Conv1D** (一维卷积神经网络): 适用于序列数据和信号处理
 - **LSTM** (长短期记忆网络): 适用于时序特征提取
 - **Transformer**: 适用于长序列建模和注意力机制
+- **MPBDNet** (多路径双分支网络): 结合卷积和循环网络，适用于复杂序列分析
+- **Autoformer** (自相关变换器): 基于自相关机制的时间序列模型
+- **Informer** (信息增强变换器): 使用概率注意力的高效Transformer
+
+### MPBDNet模型
+
+MPBDNet (Multi-Path Block with Dual branches Network) 是一个特别设计的深度神经网络，结合了卷积神经网络和循环神经网络的优势。
+
+#### 特点
+
+- **多路径架构**：通过并行分支提取不同尺度的特征
+- **双分支块**：每个MPBDBlock包含两个并行分支，使用不同大小的卷积核
+  - 第一分支：使用小卷积核(3x3)提取局部特征
+  - 第二分支：使用大卷积核(5x5, 7x7)提取更广泛的特征
+- **级联结构**：多个MPBDBlock串联，逐步增加通道数和抽象层次
+- **双向LSTM**：捕获序列中的长期依赖关系
+- **动态输入处理**：支持处理不同长度的输入序列
+- **批量规范化**：可选的批归一化层，提高训练稳定性
+- **特殊处理机制**：对单样本批次进行特殊处理，确保批归一化层正常工作
+
+#### 配置示例
+
+```yaml
+# MPBDNet配置
+model:
+  name: mpbdnet
+  input_channels: 1
+  num_classes: 3
+  list_inplanes: [3, 6, 18]  # 每个块的通道大小
+  num_rnn_sequence: 18
+  embedding_c: 50  # 嵌入维度
+  seq_len: 64
+  dropout_rate: 0.3
+  batch_norm: true
+```
+
+### Autoformer模型
+
+Autoformer是一种基于自相关机制的Transformer变体，专门为时间序列建模设计。
+
+#### 特点
+
+- **自相关机制**：利用时间序列的周期性特征，通过FFT计算序列间的自相关性
+- **序列分解**：将序列数据分解为趋势和季节性成分，分别处理
+- **高效编码器**：使用标准的Transformer编码器层，但带有自相关注意力机制
+- **线性复杂度**：相比于标准Transformer的二次方复杂度，具有更高的计算效率
+- **长序列建模**：特别适合捕获长期依赖关系和周期模式
+
+#### 配置示例
+
+```yaml
+# Autoformer配置
+model:
+  name: autoformer
+  input_dim: 1684      # 输入特征维度
+  output_dim: 3        # 输出维度（logg, feh, teff）
+  d_model: 256         # 模型维度
+  n_heads: 8           # 多头注意力头数
+  e_layers: 2          # 编码器层数
+  d_ff: 1024           # 前馈网络维度
+  dropout_rate: 0.1    # Dropout概率
+  activation: gelu     # 激活函数
+```
+
+### Informer模型
+
+Informer是一种高效的长序列Transformer变体，通过概率注意力机制降低计算复杂度。
+
+#### 特点
+
+- **概率稀疏注意力**：选择最具代表性的查询键值对，大幅降低计算开销
+- **高效自注意力蒸馏**：通过层次化的设计减少序列长度
+- **生成解码器**：使用一个步骤完成长序列预测
+- **适用于长序列**：相比标准Transformer，可以处理更长的序列输入
+- **内存高效**：显著降低内存使用量，使大规模序列建模成为可能
+
+#### 配置示例
+
+```yaml
+# Informer配置
+model:
+  name: informer
+  input_dim: 1684       # 输入特征维度
+  output_dim: 3         # 输出维度（logg, feh, teff）
+  d_model: 256          # 模型维度
+  n_heads: 8            # 多头注意力头数
+  e_layers: 3           # 编码器层数
+  d_ff: 1024            # 前馈网络维度
+  dropout_rate: 0.1     # Dropout概率
+  activation: gelu      # 激活函数
+```
 
 ## 配置文件说明
 
@@ -280,7 +380,7 @@ python detect.py --weights runs/模型名称_时间戳/weights/best.pt --input d
 ```yaml
 # 模型配置
 model:
-  name: mlp  # 可选: mlp, conv1d, lstm, transformer
+  name: mlp  # 可选: mlp, conv1d, lstm, transformer, mpbdnet, autoformer, informer
   input_dim: 64
   hidden_dims: [128, 256, 128]
   output_dim: 3  # 预测三个特征: logg, feh, teff
@@ -320,6 +420,8 @@ training:
   - 添加评估脚本和可视化功能
   - 支持通过obsid关联特征和标签文件
 - **最新更新**:
+  - 添加了MPBDNet模型，提供更强大的序列特征提取能力
+  - 添加了Autoformer和Informer模型，增强了时间序列建模能力
   - 修复了detect.py脚本，使其能够从实际数据集加载数据
   - 支持使用obsid列进行预测结果输出
   - 更新了预测可视化功能，支持多特征预测结果展示

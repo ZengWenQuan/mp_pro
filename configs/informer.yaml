@@ -15,7 +15,8 @@ model:
 data:
   train_dir: data_new/train  # 训练数据目录
   test_dir: data_new/test    # 测试数据目录
-  features_file: features.csv  # 特征文件名
+  #features_file: features.csv  # 特征文件名
+  features_file: features_filtered_501features.csv  # 特征文件名
   labels_file: labels.csv      # 标签文件名
   data_size: 1000
   seq_len: 1            # 单点预测，序列长度为1

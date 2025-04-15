@@ -265,29 +265,105 @@ class MPBDNet(nn.Module):
                     init.constant_(m.bias, 0)
     
     def forward(self, x):
-        # Ensure input shape is correct
+        # 检查批次大小，如果只有1个样本，暂时将BN层切换到eval模式
+        batch_size = x.size(0)
+        if batch_size == 1:
+            # 保存所有BN层的当前状态
+            bn_states = []
+            for m in self.modules():
+                if isinstance(m, nn.BatchNorm1d) or isinstance(m, nn.BatchNorm2d):
+                    bn_states.append((m, m.training))
+                    m.eval()  # 临时切换到评估模式
+        
+        # 确保输入形状正确
         if len(x.shape) == 2:
-            # Input is [batch_size, seq_len], add channel dimension
+            # 输入是[batch_size, seq_len]，添加通道维度
             x = x.unsqueeze(1)  # [batch_size, 1, seq_len]
         
-        # Pad if necessary to make length divisible by 8
+        # 获取实际输入特征长度
+        actual_seq_len = x.size(2)
+        
+        # 如果实际序列长度与模型初始化时的序列长度不一致，
+        # 创建一个动态的全连接层来处理不同长度的输入
+        is_dynamic_input = actual_seq_len != self.seq_len
+        
+        # 填充使得长度能被8整除（卷积网络需要）
         if x.size(2) % 8 != 0:
             padding_size = 8 - (x.size(2) % 8)
             x = torch.cat([x, torch.zeros([x.size(0), x.size(1), padding_size]).to(x.device)], dim=2)
         
-        # Process through MPBD blocks
+        # 处理通过MPBD块
         x = self.MPBDBlock_list(x)
         x = torch.relu(x)
         
-        # Embedding
+        # 嵌入
         x = self.embedding(x)
         
-        # Bidirectional LSTM processing
+        # 双向LSTM处理
         x = (self.rnn(x)[0] + torch.flip(self.rnn2(torch.flip(x, dims=[1]))[0], dims=[1])) / 2
         
-        # Fully connected layers
-        x = self.fc1(x.flatten(1))
-        x = self.fc2(x)
+        # 扁平化并处理全连接层
+        x_flat = x.flatten(1)  # [batch_size, seq_after_embedding*embedding_c]
+        
+        if is_dynamic_input:
+            # 动态创建一个新的全连接层以处理当前输入尺寸
+            dynamic_fc1 = nn.Linear(
+                in_features=x_flat.size(1),
+                out_features=256,
+                device=x.device
+            ).to(x.device)
+            
+            # 复制现有fc1的权重并进行适当调整
+            # 只复制与新输入尺寸匹配的权重部分，或者填充不足的部分
+            with torch.no_grad():
+                # 获取现有fc1的第一个线性层
+                original_fc1 = [m for m in self.fc1 if isinstance(m, nn.Linear)][0]
+                
+                # 复制权重和偏置（如果可能）
+                if x_flat.size(1) <= original_fc1.in_features:
+                    # 如果新输入维度更小，只复制需要的部分
+                    dynamic_fc1.weight.copy_(original_fc1.weight[:, :x_flat.size(1)])
+                    dynamic_fc1.bias.copy_(original_fc1.bias)
+                else:
+                    # 如果新输入维度更大，复制原有部分，其余初始化为零
+                    dynamic_fc1.weight[:, :original_fc1.in_features].copy_(original_fc1.weight)
+                    dynamic_fc1.bias.copy_(original_fc1.bias)
+            
+            # 应用动态全连接层
+            x = dynamic_fc1(x_flat)
+            
+            # 应用其他层（激活函数、dropout等）
+            for layer in [m for m in self.fc1 if not isinstance(m, nn.Linear)]:
+                if batch_size == 1 and isinstance(layer, nn.BatchNorm1d):
+                    # 对于单样本，跳过BatchNorm
+                    continue
+                x = layer(x)
+        else:
+            # 使用原始的fc1层
+            if batch_size == 1:
+                # 对于单样本，只应用线性层和非BN层
+                fc1_linear = [m for m in self.fc1 if isinstance(m, nn.Linear)][0]
+                x = fc1_linear(x_flat)
+                for layer in [m for m in self.fc1 if not isinstance(m, nn.BatchNorm1d) and not isinstance(m, nn.Linear)]:
+                    x = layer(x)
+            else:
+                x = self.fc1(x_flat)
+        
+        # 继续应用其他层
+        if batch_size == 1:
+            # 对于单样本，只应用线性层和非BN层
+            fc2_linear = [m for m in self.fc2 if isinstance(m, nn.Linear)][0]
+            x = fc2_linear(x)
+            for layer in [m for m in self.fc2 if not isinstance(m, nn.BatchNorm1d) and not isinstance(m, nn.Linear)]:
+                x = layer(x)
+        else:
+            x = self.fc2(x)
+            
         x = self.output(x)
+        
+        # 恢复BN层的原始状态
+        if batch_size == 1:
+            for m, training in bn_states:
+                m.training = training
         
         return x 

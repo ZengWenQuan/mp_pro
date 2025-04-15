@@ -4,10 +4,10 @@ import torch.nn.init as init
 
 class Conv1D(nn.Module):
     def __init__(self, input_channels=1, seq_len=64, num_classes=1, 
-                 channels=[32, 64, 128], kernel_sizes=[3, 3, 3], 
+                 channels=[16, 32, 64, 128], kernel_sizes=[5, 5, 3, 3], 
                  fc_dims=[256, 128], dropout_rate=0.2, batch_norm=False):
         """
-        Simple 1D Convolutional Neural Network for sequence prediction
+        Lightweight 1D Convolutional Neural Network for sequence prediction
         
         Args:
             input_channels: Number of input channels
@@ -23,32 +23,44 @@ class Conv1D(nn.Module):
         
         # 保存输入参数
         self.input_channels = input_channels
+        self.seq_len = seq_len
         
-        # 确保序列长度是2的幂次方的最小整数
-        # 这样可以避免序列长度过小导致MaxPool1d后长度为0的问题
-        min_seq_len = 2 ** len(channels)  # 最小需要的序列长度
-        if seq_len < min_seq_len:
-            seq_len = min_seq_len
-            print(f"Warning: seq_len too small, adjusted to {seq_len}")
+        # 确保卷积层和核大小列表长度一致
+        assert len(channels) == len(kernel_sizes), "通道数列表和核大小列表长度必须相同"
         
-        # Convolutional layers
+        # 初始设置
+        self.adaptive_pool = None
+        curr_seq_len = seq_len
+        
+        # Convolutional layers with MaxPooling
         layers = []
         in_channels = input_channels
         
-        for out_channels, kernel_size in zip(channels, kernel_sizes):
+        for i, (out_channels, kernel_size) in enumerate(zip(channels, kernel_sizes)):
             layers.append(nn.Conv1d(in_channels, out_channels, kernel_size, padding=kernel_size//2))
             if batch_norm:
                 layers.append(nn.BatchNorm1d(out_channels))
             layers.append(nn.ReLU())
+            
+            # 每个卷积层后都添加池化层以快速降维
+            pool_size = 4 if i == 0 else 2  # 第一层使用更大的池化窗口
+            layers.append(nn.MaxPool1d(kernel_size=pool_size, stride=pool_size))
+            curr_seq_len = curr_seq_len // pool_size
+            
             layers.append(nn.Dropout(dropout_rate))
             in_channels = out_channels
         
+        # 使用自适应池化确保输出维度固定，无论输入长度如何变化
+        target_seq_len = 16  # 减小目标序列长度以减少参数
+        self.adaptive_pool = nn.AdaptiveMaxPool1d(target_seq_len)
+        curr_seq_len = target_seq_len
+        
         self.conv_layers = nn.Sequential(*layers)
         
-        # 计算卷积层输出大小
-        self.conv_output_size = channels[-1] * (seq_len // (2 ** len(channels)))
+        # 计算展平后的特征维度
+        self.conv_output_size = channels[-1] * curr_seq_len
         
-        # Fully connected layers
+        # 全连接层
         fc_layers = []
         prev_dim = self.conv_output_size
         for dim in fc_dims:
@@ -65,6 +77,10 @@ class Conv1D(nn.Module):
         
         # 使用Kaiming初始化所有卷积层和线性层
         self._initialize_weights()
+        
+        # 计算并打印模型参数量
+        total_params = sum(p.numel() for p in self.parameters())
+        print(f"Conv1D模型参数量: {total_params:,}")
     
     def _initialize_weights(self):
         """初始化模型权重使用Kaiming初始化"""
@@ -100,28 +116,16 @@ class Conv1D(nn.Module):
                 # 如果期望多通道，但维度不匹配，输出错误信息
                 raise ValueError(f"Conv1D: Expected input_channels={self.input_channels}, got {x.shape[1]}")
         
-        # 执行卷积层操作
-        try:
-            x = self.conv_layers(x)
-        except RuntimeError as e:
-            print(f"Conv1D卷积层错误: {e}")
-            print(f"输入形状: {x.shape}")
-            raise
+        # 处理卷积层
+        x = self.conv_layers(x)
+        
+        # 应用自适应池化
+        x = self.adaptive_pool(x)
         
         # 展平张量，准备送入全连接层
-        try:
-            x = x.view(x.size(0), -1)  # Flatten
-        except RuntimeError as e:
-            print(f"Conv1D展平错误: {e}")
-            print(f"卷积输出形状: {x.shape}")
-            raise
+        x = x.view(x.size(0), -1)  # Flatten
         
-        # 执行全连接层操作
-        try:
-            x = self.fc_layers(x)
-        except RuntimeError as e:
-            print(f"Conv1D全连接层错误: {e}")
-            print(f"展平后形状: {x.shape}")
-            raise
+        # 全连接层
+        x = self.fc_layers(x)
         
         return x 

@@ -66,16 +66,20 @@ class LSTM(nn.Module):
                         init.constant_(param, 0)
     
     def forward(self, x):
-        """前向传播"""
-        # 打印输入形状，帮助调试
-        orig_shape = x.shape
+        """
+        前向传播
         
-        # 确保输入形状正确 - Conv1D处理的是 [batch_size, channels, seq_len]
-        # LSTM需要的是 [batch_size, seq_len, features]
+        Args:
+            x: 输入数据，可以是2D [batch_size, features] 或 3D [batch_size, seq_len, features]
+               或 3D [batch_size, channels, seq_len]
         
-        # 如果输入是2D: [batch_size, seq_len]，添加一个特征维度
+        Returns:
+            output: 模型输出
+        """
+        # 确保输入是3D张量 [batch_size, seq_len, features]
         if len(x.shape) == 2:
-            x = x.unsqueeze(2)  # 变为 [batch_size, seq_len, 1]
+            # 如果输入是2D [batch_size, features]，添加序列维度
+            x = x.unsqueeze(1)  # [batch_size, 1, features]
         
         # 如果输入是3D但是Conv1D格式 [batch_size, channels, seq_len]
         # 需要转置为LSTM格式 [batch_size, seq_len, channels]
@@ -88,6 +92,29 @@ class LSTM(nn.Module):
                 # 如果期望的输入维度是1，则压缩最后一维
                 batch_size, seq_len, _ = x.shape
                 x = x.reshape(batch_size, seq_len, 1)
+            else:
+                # 如果输入特征与模型期望不一致，则调整LSTM层的输入维度
+                # 注意这只在首次调用时执行，会修改模型结构
+                print(f"调整LSTM层输入维度: 从 {self.input_dim} 到 {x.shape[2]}")
+                
+                # 创建新的LSTM层
+                device = next(self.parameters()).device
+                new_lstm = nn.LSTM(
+                    input_size=x.shape[2],
+                    hidden_size=self.hidden_dim,
+                    num_layers=self.num_layers,
+                    batch_first=True,
+                    dropout=self.dropout_rate if self.num_layers > 1 else 0,
+                    bidirectional=self.bidirectional
+                ).to(device)
+                
+                # 保留旧的LSTM层其他参数（如hidden_size, num_layers等）
+                # 但重新初始化input相关的权重
+                
+                # 更新模型的输入维度
+                self.input_dim = x.shape[2]
+                # 替换LSTM层
+                self.lstm = new_lstm
         
         # LSTM处理
         lstm_out, _ = self.lstm(x)
