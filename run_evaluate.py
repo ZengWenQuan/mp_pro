@@ -18,7 +18,7 @@ def main():
     parser = argparse.ArgumentParser(description="启动模型评估")
     parser.add_argument("--model-path", type=str, required=True,
                         help="模型权重文件路径")
-    parser.add_argument("--config", type=str, default="configs/mpbdnet.yaml",
+    parser.add_argument("--config", type=str, default="configs/config.yaml",
                         help="配置文件路径")
     parser.add_argument("--output-dir", type=str, default=None,
                         help="结果输出目录")

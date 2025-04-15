@@ -41,15 +41,29 @@ class Trainer:
         os.makedirs(self.model_info_dir, exist_ok=True)
         
         # Get device
-        device_id = config.get('device', -1)  # 默认使用-1（CPU）
-        if device_id >= 0 and torch.cuda.is_available():
-            if device_id >= torch.cuda.device_count():
-                print(f"Warning: Specified GPU {device_id} not available. Using GPU 0 instead.")
-                device_id = 0
-            self.device = torch.device(f'cuda:{device_id}')
-            torch.cuda.set_device(device_id)  # 设置当前使用的GPU
+        device_setting = config.get('device', 'cpu')
+        if device_setting == 'cuda' and torch.cuda.is_available():
+            # 使用第一个可用的CUDA设备
+            self.device = torch.device('cuda:0')
+            torch.cuda.set_device(0)
+            print(f"Using CUDA device 0: {torch.cuda.get_device_name(0)}")
+        elif isinstance(device_setting, (int, str)) and str(device_setting).isdigit():
+            # 如果是数字（包括字符串形式），转换为整数
+            device_id = int(device_setting)
+            if device_id >= 0 and torch.cuda.is_available():
+                if device_id >= torch.cuda.device_count():
+                    print(f"Warning: Specified GPU {device_id} not available. Using GPU 0 instead.")
+                    device_id = 0
+                self.device = torch.device(f'cuda:{device_id}')
+                torch.cuda.set_device(device_id)
+                print(f"Using CUDA device {device_id}: {torch.cuda.get_device_name(device_id)}")
+            else:
+                self.device = torch.device('cpu')
+                print("Using CPU for training")
         else:
+            # 默认使用CPU
             self.device = torch.device('cpu')
+            print("Using CPU for training")
         
         self.model = self.model.to(self.device)
         

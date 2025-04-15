@@ -37,130 +37,106 @@ def parse_args():
 
 def load_model(weights_path, config=None):
     """Load trained model from weights"""
-    device = get_device()
-    checkpoint = torch.load(weights_path, map_location=device)
+    if config is None:
+        print("No config provided, loading from weights file...")
+        if not os.path.exists(weights_path):
+            raise FileNotFoundError(f"Weights file not found: {weights_path}")
+        checkpoint = torch.load(weights_path, map_location='cpu')
+        config = checkpoint.get('config', {})
+        
+    # 获取模型配置
+    model_cfg = config.get('model', {})
+    model_name = model_cfg.get('name')
     
-    # Determine model type and parameters from config or checkpoint
-    if config is not None:
-        model_cfg = config['model']
-        model_name = model_cfg.get('name', 'mlp').lower()
-    else:
-        # Try to infer model type from checkpoint
-        # This is a simplified approach; in a real application, you might
-        # want to save model type and params in the checkpoint
-        if 'model_config' in checkpoint and 'name' in checkpoint['model_config']:
-            model_name = checkpoint['model_config']['name'].lower()
-            model_cfg = checkpoint['model_config']
-        else:
-            state_dict = checkpoint['model_state_dict']
-            keys = list(state_dict.keys())
-            
-            if any('lstm' in key for key in keys):
-                model_name = 'lstm'
-                model_cfg = {
-                    'input_dim': 64,  # 会根据实际数据调整
-                    'hidden_dim': 128,
-                    'num_layers': 2,
-                    'bidirectional': True,
-                    'output_dim': 3,
-                    'dropout_rate': 0.0  # No dropout during inference
-                }
-            elif any('transformer' in key for key in keys):
-                model_name = 'transformer'
-                model_cfg = {
-                    'input_dim': 64,  # 会根据实际数据调整
-                    'd_model': 128,
-                    'nhead': 8,
-                    'num_layers': 3,
-                    'dim_feedforward': 512,
-                    'output_dim': 3,
-                    'dropout_rate': 0.0  # No dropout during inference
-                }
-            elif any('conv' in key for key in keys):
-                model_name = 'conv1d'
-                model_cfg = {
-                    'input_dim': 64,  # 会根据实际数据调整
-                    'channels': [32, 64, 128, 256, 512],
-                    'kernel_sizes': [3, 3, 3, 3, 3],
-                    'fc_dims': [512, 256],
-                    'output_dim': 3,
-                    'dropout_rate': 0.0  # No dropout during inference
-                }
-            else:
-                model_name = 'mlp'
-                model_cfg = {
-                    'input_dim': 64,  # 会根据实际数据调整
-                    'hidden_dims': [128, 256, 128],
-                    'output_dim': 3,
-                    'dropout_rate': 0.0  # No dropout during inference
-                }
+    print(f"Loading {model_name} model...")
     
-    # 获取输入和输出维度
-    input_dim = model_cfg.get('input_dim', 64)
-    output_dim = model_cfg.get('output_dim', 3)
-    
-    print(f"加载{model_name}模型，输入维度: {input_dim}, 输出维度: {output_dim}")
-    
-    # Create model
     if model_name == 'mlp':
+        from models.model.mlp import MLP
         model = MLP(
-            input_dim=input_dim,
-            hidden_dims=model_cfg.get('hidden_dims', [128, 256, 128]),
-            output_dim=output_dim,
-            dropout_rate=model_cfg.get('dropout_rate', 0.0)
+            input_dim=model_cfg.get('input_dim', 1),
+            hidden_dims=model_cfg.get('hidden_dims', [64, 64]),
+            output_dim=model_cfg.get('output_dim', 3),
+            dropout_rate=model_cfg.get('dropout_rate', 0.1),
+            batch_norm=model_cfg.get('batch_norm', False)
         )
     elif model_name == 'conv1d':
+        from models.model.conv1d import Conv1D
         model = Conv1D(
-            input_channels=1,  # 固定为1，特征将在forward中重新排列
-            seq_len=input_dim,  # 使用输入维度作为序列长度
-            num_classes=output_dim,
-            channels=model_cfg.get('channels', [32, 64, 128, 256, 512]),
-            kernel_sizes=model_cfg.get('kernel_sizes', [3, 3, 3, 3, 3]),
-            fc_dims=model_cfg.get('fc_dims', [512, 256]),
-            dropout_rate=model_cfg.get('dropout_rate', 0.0)
+            input_dim=model_cfg.get('input_dim', 1),
+            hidden_dim=model_cfg.get('hidden_dim', 64),
+            kernel_size=model_cfg.get('kernel_size', 3),
+            num_layers=model_cfg.get('num_layers', 3),
+            output_dim=model_cfg.get('output_dim', 3),
+            dropout_rate=model_cfg.get('dropout_rate', 0.1),
+            batch_norm=model_cfg.get('batch_norm', False)
         )
     elif model_name == 'lstm':
+        from models.model.lstm import LSTM
         model = LSTM(
-            input_dim=1,  # 固定为1，光谱数据每个时间点一个特征值
-            hidden_dim=model_cfg.get('hidden_dim', 128),
+            input_dim=model_cfg.get('input_dim', 1),
+            hidden_dim=model_cfg.get('hidden_dim', 64),
             num_layers=model_cfg.get('num_layers', 2),
-            bidirectional=model_cfg.get('bidirectional', True),
-            dropout_rate=model_cfg.get('dropout_rate', 0.0),
-            output_dim=output_dim
+            output_dim=model_cfg.get('output_dim', 3),
+            dropout_rate=model_cfg.get('dropout_rate', 0.1),
+            bidirectional=model_cfg.get('bidirectional', False),
+            batch_norm=model_cfg.get('batch_norm', False)
         )
     elif model_name == 'transformer':
+        from models.model.transformer import SpectralTransformer
         model = SpectralTransformer(
-            input_dim=1,  # 固定为1，光谱数据每个时间点一个特征值
+            input_dim=model_cfg.get('input_dim', 1),
             d_model=model_cfg.get('d_model', 128),
             nhead=model_cfg.get('nhead', 8),
             num_layers=model_cfg.get('num_layers', 3),
             dim_feedforward=model_cfg.get('dim_feedforward', 512),
-            dropout_rate=model_cfg.get('dropout_rate', 0.0),
-            output_dim=output_dim
+            dropout_rate=model_cfg.get('dropout_rate', 0.1),
+            output_dim=model_cfg.get('output_dim', 3),
+            batch_norm=model_cfg.get('batch_norm', False)
+        )
+    elif model_name == 'mpbdnet':
+        from models.model.mpbdnet import MPBDNet
+        model = MPBDNet(
+            input_dim=model_cfg.get('input_dim', 1),
+            hidden_dim=model_cfg.get('hidden_dim', 64),
+            output_dim=model_cfg.get('output_dim', 3),
+            num_layers=model_cfg.get('num_layers', 3),
+            dropout_rate=model_cfg.get('dropout_rate', 0.1)
+        )
+    elif model_name == 'autoencoder':
+        from models.model.autoencoder import Autoencoder
+        model = Autoencoder(
+            input_dim=model_cfg.get('input_dim', 1),
+            latent_dim=model_cfg.get('latent_dim', 32),
+            output_dim=model_cfg.get('output_dim', 3)
+        )
+    elif model_name == 'autoformer':
+        from models.model.autoformer import Autoformer
+        model = Autoformer(
+            input_dim=model_cfg.get('input_dim', 1),
+            output_dim=model_cfg.get('output_dim', 3),
+            d_model=model_cfg.get('d_model', 512),
+            n_heads=model_cfg.get('n_heads', 8),
+            e_layers=model_cfg.get('e_layers', 3),
+            d_layers=model_cfg.get('d_layers', 2),
+            d_ff=model_cfg.get('d_ff', 2048),
+            moving_avg=model_cfg.get('moving_avg', 25),
+            dropout=model_cfg.get('dropout_rate', 0.05),
+            activation=model_cfg.get('activation', 'gelu'),
+            output_attention=model_cfg.get('output_attention', False)
         )
     else:
-        raise ValueError(f"Unsupported model: {model_name}")
+        raise ValueError(f"Unsupported model type: {model_name}")
     
-    # 打印模型结构概要
-    print(f"模型结构总结:")
-    print(f"  参数总数: {sum(p.numel() for p in model.parameters())}")
-    print(f"  可训练参数: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
-    
-    # Load weights
-    try:
+    # 加载权重
+    if os.path.exists(weights_path):
+        print(f"Loading weights from {weights_path}")
+        checkpoint = torch.load(weights_path, map_location='cpu')
         model.load_state_dict(checkpoint['model_state_dict'])
-        print("模型权重加载成功")
-    except Exception as e:
-        print(f"加载模型权重时出错: {e}")
-        print("尝试使用非严格模式加载...")
-        model.load_state_dict(checkpoint['model_state_dict'], strict=False)
-        print("模型权重已加载（非严格模式）")
+        print("Model loaded successfully")
+    else:
+        print(f"Warning: Weights file {weights_path} not found, using untrained model")
     
-    model = model.to(device)
-    model.eval()
-    
-    print(f"Loaded {model_name} model from {weights_path}")
-    return model, model_name
+    return model
 
 
 def load_input_data(input_path, config=None):

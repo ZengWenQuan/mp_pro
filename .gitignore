@@ -41,6 +41,12 @@ predictions/
 .DS_Store
 
 data/
+data_new/
+results/
+PDF/    
+
+
+
 
 scrip.ipynb
 backups/

@@ -26,7 +26,7 @@ plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
 
 from utils.general import seed_everything, load_config, get_device
 from utils.dataset import Normalizer
-from models.model import MLP, Conv1D, LSTM, SpectralTransformer, MPBDNet
+from models.model import MLP, Conv1D, LSTM, SpectralTransformer, MPBDNet, Autoformer, Informer, Transformer2
 
 
 def parse_args():
@@ -53,57 +53,112 @@ def get_model(model_cfg):
     print(f"创建{model_name}模型，输入维度: {input_dim}, 输出维度: {output_dim}")
     
     if model_name == 'mlp':
+        from models.model.mlp import MLP
         model = MLP(
             input_dim=input_dim,
             hidden_dims=model_cfg.get('hidden_dims', [128, 256, 128]),
             output_dim=output_dim,
-            dropout_rate=model_cfg.get('dropout_rate', 0.2)
+            dropout_rate=model_cfg.get('dropout_rate', 0.1),
+            batch_norm=model_cfg.get('batch_norm', False)
         )
     
     elif model_name == 'conv1d':
-        # 对于Conv1D模型，输入通道数始终为1，将特征数量作为序列长度
+        from models.model.conv1d import Conv1D
         model = Conv1D(
-            input_channels=1,  # 固定为1，特征将在forward中重新排列
-            seq_len=input_dim,  # 使用输入维度作为序列长度
-            num_classes=output_dim,
-            channels=model_cfg.get('channels', [32, 64, 128, 256, 512]),
-            kernel_sizes=model_cfg.get('kernel_sizes', [3, 3, 3, 3, 3]),
-            fc_dims=model_cfg.get('fc_dims', [512, 256]),
-            dropout_rate=model_cfg.get('dropout_rate', 0.2)
+            input_dim=model_cfg.get('input_dim', 1),
+            hidden_dim=model_cfg.get('hidden_dim', 64),
+            kernel_size=model_cfg.get('kernel_size', 3),
+            num_layers=model_cfg.get('num_layers', 3),
+            output_dim=model_cfg.get('output_dim', 3),
+            dropout_rate=model_cfg.get('dropout_rate', 0.1),
+            batch_norm=model_cfg.get('batch_norm', False)
         )
     
     elif model_name == 'lstm':
-        # 对于LSTM模型，我们假设输入特征维度为1（单通道），使用config.seq_len作为序列长度
+        from models.model.lstm import LSTM
         model = LSTM(
-            input_dim=1,  # 固定为1，一般光谱数据每个时间点一个特征值
-            hidden_dim=model_cfg.get('hidden_dim', 128),
+            input_dim=model_cfg.get('input_dim', 1),
+            hidden_dim=model_cfg.get('hidden_dim', 64),
             num_layers=model_cfg.get('num_layers', 2),
-            bidirectional=model_cfg.get('bidirectional', True),
-            dropout_rate=model_cfg.get('dropout_rate', 0.2),
-            output_dim=output_dim
+            output_dim=model_cfg.get('output_dim', 3),
+            dropout_rate=model_cfg.get('dropout_rate', 0.1),
+            bidirectional=model_cfg.get('bidirectional', False),
+            batch_norm=model_cfg.get('batch_norm', False)
         )
     
     elif model_name == 'transformer':
-        # 对于Transformer模型，我们假设输入特征维度为1，使用config.seq_len作为序列长度
+        from models.model.transformer import SpectralTransformer
         model = SpectralTransformer(
-            input_dim=1,  # 固定为1，光谱数据每个时间点一个特征值
+            input_dim=model_cfg.get('input_dim', 1),
             d_model=model_cfg.get('d_model', 128),
             nhead=model_cfg.get('nhead', 8),
             num_layers=model_cfg.get('num_layers', 3),
             dim_feedforward=model_cfg.get('dim_feedforward', 512),
             dropout_rate=model_cfg.get('dropout_rate', 0.1),
-            output_dim=output_dim
+            output_dim=output_dim,
+            batch_norm=model_cfg.get('batch_norm', False)
         )
     
     elif model_name == 'mpbdnet':
-        # 对于MPBDNet模型，我们使用配置中的参数
+        from models.model.mpbdnet import MPBDNet
         model = MPBDNet(
-            num_classes=output_dim,
-            list_inplanes=model_cfg.get('list_inplanes', [3, 6, 18]),
-            num_rnn_sequence=model_cfg.get('num_rnn_sequence', 18),
-            embedding_c=model_cfg.get('embedding_c', 50),
-            seq_len=input_dim,
-            dropout_rate=model_cfg.get('dropout_rate', 0.3)
+            input_dim=model_cfg.get('input_dim', 1),
+            hidden_dim=model_cfg.get('hidden_dim', 64),
+            output_dim=model_cfg.get('output_dim', 3),
+            num_layers=model_cfg.get('num_layers', 3),
+            dropout_rate=model_cfg.get('dropout_rate', 0.1)
+        )
+    
+    elif model_name == 'autoencoder':
+        from models.model.autoencoder import Autoencoder
+        model = Autoencoder(
+            input_dim=model_cfg.get('input_dim', 1),
+            latent_dim=model_cfg.get('latent_dim', 32),
+            output_dim=model_cfg.get('output_dim', 3)
+        )
+        
+    elif model_name == 'autoformer':
+        from models.model.autoformer import Autoformer
+        model = Autoformer(
+            input_dim=model_cfg.get('input_dim', 1),
+            output_dim=model_cfg.get('output_dim', 3),
+            d_model=model_cfg.get('d_model', 512),
+            n_heads=model_cfg.get('n_heads', 8),
+            e_layers=model_cfg.get('e_layers', 3),
+            d_layers=model_cfg.get('d_layers', 2),
+            d_ff=model_cfg.get('d_ff', 2048),
+            moving_avg=model_cfg.get('moving_avg', 25),
+            dropout=model_cfg.get('dropout_rate', 0.05),
+            activation=model_cfg.get('activation', 'gelu'),
+            output_attention=model_cfg.get('output_attention', False)
+        )
+
+    elif model_name == 'informer':
+        from models.model.informer import Informer
+        model = Informer(
+            input_dim=model_cfg.get('input_dim', 1),
+            output_dim=model_cfg.get('output_dim', 3),
+            d_model=model_cfg.get('d_model', 256),
+            n_heads=model_cfg.get('n_heads', 8),
+            e_layers=model_cfg.get('e_layers', 3),
+            d_ff=model_cfg.get('d_ff', 1024),
+            dropout=model_cfg.get('dropout_rate', 0.1),
+            activation=model_cfg.get('activation', 'gelu'),
+            output_attention=model_cfg.get('output_attention', False)
+        )
+    
+    elif model_name == 'transformer2':
+        from models.model.transformer2 import Transformer2
+        model = Transformer2(
+            input_dim=model_cfg.get('input_dim', 1),
+            output_dim=model_cfg.get('output_dim', 3),
+            d_model=model_cfg.get('d_model', 256),
+            n_heads=model_cfg.get('n_heads', 8),
+            num_layers=model_cfg.get('num_layers', 3),
+            d_ff=model_cfg.get('d_ff', 1024),
+            dropout=model_cfg.get('dropout_rate', 0.1),
+            use_pos_encoding=model_cfg.get('use_pos_encoding', True),
+            output_attention=model_cfg.get('output_attention', False)
         )
     
     else:

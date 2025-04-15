@@ -1,0 +1,47 @@
+# Transformer2 模型配置
+model:
+  name: transformer2
+  input_dim: 1684      # 输入特征维度
+  output_dim: 3        # 输出维度（logg, feh, teff）
+  d_model: 256         # 模型维度
+  n_heads: 8           # 多头注意力头数
+  num_layers: 3        # Transformer编码器层数
+  d_ff: 1024           # 前馈网络维度
+  dropout_rate: 0.1    # Dropout概率
+  use_pos_encoding: true  # 是否使用位置编码
+  output_attention: false  # 是否输出注意力权重
+
+# 数据配置
+data:
+  train_dir: data_new/train  # 训练数据目录
+  test_dir: data_new/test    # 测试数据目录
+  features_file: features.csv  # 特征文件名
+  labels_file: labels.csv      # 标签文件名
+  data_size: 1000
+  seq_len: 1            # 单点预测，序列长度为1
+  feature_dim: 1684     # 特征维度
+  val_split: 0.2        # 验证集比例
+  test_split: 0.1       # 测试集比例
+  num_workers: 4        # 数据加载器工作线程数
+  id_column: obsid      # ID列名
+  labels:
+    - logg  # 表面重力
+    - feh   # 金属丰度
+    - teff  # 有效温度
+  use_all_features: true  # 使用所有特征
+
+# 训练配置
+training:
+  device: 0              # GPU设备ID
+  batch_size: 128        # 批量大小
+  epochs: 200             # 训练轮数
+  learning_rate: 0.001   # 学习率
+  weight_decay: 0.0001   # 权重衰减
+  loss: mse              # 损失函数
+  optimizer: adam        # 优化器
+  scheduler: cosine      # 学习率调度器
+  early_stopping: -1     # 早停耐心值
+  scheduler_params:
+    t_max: 25            # 余弦调度器周期
+    warmup_steps: 5      # 预热步数
+  gradient_clip: 1.0     # 梯度裁剪阈值 
